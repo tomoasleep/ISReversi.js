@@ -48,6 +48,7 @@ class ReversiInterface
 
     @canvas.beginPath().
       arc(x * 60 - 30, y * 60 - 30, 25, 0, Math.PI * 2, true).fill()
+    @canvas.beginPath()
 
   mouseEvent: (screenx, screeny) ->
     console.log "mouseInputCan: #{canKeyWait}"
