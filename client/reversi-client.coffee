@@ -9,7 +9,7 @@ class ReversiInterface
   board = (new Array(10) for _v in new Array(10))
   canKeyWait = false
 
-  constructor: (target, id) ->
+  constructor: (target, @id) ->
     @canvas = cq(480, 480)
     @canvas.strokeStyle('#333333')
     @canvas.fillStyle('#00ff00').fillRect(0, 0, 480, 480)
@@ -74,15 +74,6 @@ class ReversiClient
   constructor: (@_interface, @socket, @name) ->
     self = @
     @_interface.client = @ if @_interface
-
-    @socket.on 'game board update', (res) ->
-      console.log res
-      self._updateCallback(res)
-      self.updateLog(res)
-
-    @socket.on 'game board submitted', () ->
-      self._submittedCallback()
-
     @_interface.beginKeyWait() if @_interface
 
   mouseEvent: (screenx, screeny) ->
@@ -106,54 +97,73 @@ class ReversiClient
       @_interface.applyUpdate(res)
       @_interface.beginKeyWait()
 
-  _submittedCallback: () ->
+  _submittedCallback: ->
     @_interface.beginKeyWait() if @_interface
 
-  roomListRequest: () ->
+  roomListRequest: ->
     @socket.emit('request roomlist')
+
+  mouseEventOn: ->
+    interfaceId = "##{@_interface.id}"
+    self = @
+    $(interfaceId).on 'click', (event) ->
+      console.log ("click: " + event.pageX + ", " + event.pageY)
+      self.mouseEvent(event.pageX, event.pageY)
+
+  mouseEventOff: ->
+    interfaceId = "##{@_interface.id}"
+    $(interfaceId).off 'click'
 
 $ ->
   socket = io.connect 'http://localhost:3000'
   revClient = null
 
-  socket.on 'loginRoomMsg', (msg) ->
+  socket.on 'notice login', (msg) ->
     html = "<p>login(room: #{msg.roomname}): #{msg.username}</p>"
     $(html).hide().prependTo('#chatlog').slideDown()
 
-  socket.on 'logoutRoomMsg', (msg) ->
+  socket.on 'notice logout', (msg) ->
     html = "<p>logout(room: #{msg.roomname}): #{msg.username}</p>"
     $(html).hide().prependTo('#chatlog').slideDown()
 
   socket.on 'game standby', ->
     revInterface = new ReversiInterface "#reversi-space", "reversi-board"
     revClient = new ReversiClient(revInterface, socket)
+    revClient.mouseEventOn()
+    html = "<p>-- game start --</p>"
+    $(html).hide().prependTo('#chatlog').slideDown()
 
   socket.on 'game cancel', ->
     html = "<p>-- game canceled --</p>"
     $(html).hide().prependTo('#chatlog').slideDown()
-    $('#reversi-board').off 'click'
+    revClient.mouseEventOff()
     revClient = null
 
   socket.on 'game result', (res) ->
-    html = "<p>-- game ended --</p>"
+    html = "<p>-- game end --</p>"
     $(html).hide().prependTo('#chatlog').slideDown()
     html = "<p>#{res.result}, black: #{res.black}, white: #{res.white}</p>"
     $(html).hide().prependTo('#chatlog').slideDown()
-    $('#reversi-board').off 'click'
+    revClient.mouseEventOff()
     revClient = null
 
   socket.on 'game turn', (color) ->
     html = "<p>Your Turn: #{if color == ReversiRule.black then 'black' else 'white'}</p>"
     $(html).hide().prependTo('#chatlog').slideDown()
 
-    $('#reversi-board').on 'click', (event) ->
-      console.log ("click: " + event.pageX + ", " + event.pageY)
-      revClient.mouseEvent(event.pageX, event.pageY) if revClient
-
   socket.on 'response roomlist', (res) ->
     for idx, val of res
       html = "<p>#{val.name}: #{val.players}</p>"
       $(html).hide().prependTo('#chatlog').slideDown()
+
+  socket.on 'game board update', (res) ->
+    console.log res
+    return unless revClient
+    revClient._updateCallback(res)
+    revClient.updateLog(res)
+
+  socket.on 'game board submitted', () ->
+    revClient._submittedCallback() if revClient
 
   $('#loginRoom').on 'submit', ->
     console.log "submit: " + $("#loginRoomName").val()
@@ -164,7 +174,13 @@ $ ->
     console.log "logout submit"
     socket.emit 'room logout'
 
-  socket.emit('request roomlist')
+  $('#requestRoomList').on 'submit', ->
+    socket.emit 'request roomlist'
+
+  $('#deletelog').on 'submit', ->
+    $('#chatlog').empty()
+
+  socket.emit 'request roomlist'
 
 # exports.ReversiClient = ReversiClient
 # exports.ReversiInterface = ReversiInterface

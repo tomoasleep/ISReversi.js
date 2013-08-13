@@ -125,7 +125,7 @@ class ReversiServer
       if success
         console.log "done/login room: #{name}, id: #{socket.id}"
         socket.join(name)
-        self._sockets.emit('loginRoomMsg',
+        self._sockets.emit('notice login',
           username: ReversiServer.socketidMask socket.id
           roomname: name
         )
@@ -157,7 +157,7 @@ class ReversiServer
           self._sockets.to(roomname).emit('game cancel', roomname)
 
         socket.leave(roomname)
-        self._sockets.emit 'logoutRoomMsg',
+        self._sockets.emit 'notice logout',
           username: ReversiServer.socketidMask socket.id
           roomname: roomname
 
@@ -176,23 +176,25 @@ class ReversiServer
       @_sockets.to(usrst.roomname).emit('game board update', update) if update
       if usrst.room.isGameEnd()
         @performGameEnd(usrst.room)
-      else
+      else if update
         @sendTurnNotify(usrst.room)
     socket.emit('game board submitted')
 
   performGameEnd: (room) ->
     self = @
     room.countStone()
-    stone = room.countStone
+    stone = room.countStone()
+    console.log stone
+
     result = new Array(2)
     if stone.white > stone.black
       result = ['win', 'lose']
-    else if stone.black > stone.white
+    else if stone.white < stone.black
       result = ['lose', 'win']
     else
       result = ['draw', 'draw']
     [ReversiBoard.white, ReversiBoard.black].forEach (e, i) ->
-      self._sockets.socket(room.findUserByColor(e)).emit 'game result',
+      self._sockets.socket(room.findUserByColor(e)).emit 'game result', 
         result: result[i]
         black: stone.black
         white: stone.white

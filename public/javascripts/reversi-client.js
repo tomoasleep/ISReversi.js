@@ -25,6 +25,7 @@
 
     function ReversiInterface(target, id) {
       var i, linePosList, val, _i, _j, _len, _len1;
+      this.id = id;
       this.canvas = cq(480, 480);
       this.canvas.strokeStyle('#333333');
       this.canvas.fillStyle('#00ff00').fillRect(0, 0, 480, 480);
@@ -118,14 +119,6 @@
       if (this._interface) {
         this._interface.client = this;
       }
-      this.socket.on('game board update', function(res) {
-        console.log(res);
-        self._updateCallback(res);
-        return self.updateLog(res);
-      });
-      this.socket.on('game board submitted', function() {
-        return self._submittedCallback();
-      });
       if (this._interface) {
         this._interface.beginKeyWait();
       }
@@ -169,6 +162,22 @@
       return this.socket.emit('request roomlist');
     };
 
+    ReversiClient.prototype.mouseEventOn = function() {
+      var interfaceId, self;
+      interfaceId = "#" + this._interface.id;
+      self = this;
+      return $(interfaceId).on('click', function(event) {
+        console.log("click: " + event.pageX + ", " + event.pageY);
+        return self.mouseEvent(event.pageX, event.pageY);
+      });
+    };
+
+    ReversiClient.prototype.mouseEventOff = function() {
+      var interfaceId;
+      interfaceId = "#" + this._interface.id;
+      return $(interfaceId).off('click');
+    };
+
     return ReversiClient;
 
   })();
@@ -177,38 +186,44 @@
     var revClient, socket;
     socket = io.connect('http://localhost:3000');
     revClient = null;
-    socket.on('loginRoomMsg', function(msg) {
+    socket.on('notice login', function(msg) {
       var html;
       html = "<p>login(room: " + msg.roomname + "): " + msg.username + "</p>";
       return $(html).hide().prependTo('#chatlog').slideDown();
     });
-    socket.on('logoutRoomMsg', function(msg) {
+    socket.on('notice logout', function(msg) {
       var html;
       html = "<p>logout(room: " + msg.roomname + "): " + msg.username + "</p>";
       return $(html).hide().prependTo('#chatlog').slideDown();
     });
     socket.on('game standby', function() {
-      var revInterface;
+      var html, revInterface;
       revInterface = new ReversiInterface("#reversi-space", "reversi-board");
-      return revClient = new ReversiClient(revInterface, socket);
+      revClient = new ReversiClient(revInterface, socket);
+      revClient.mouseEventOn();
+      html = "<p>-- game start --</p>";
+      return $(html).hide().prependTo('#chatlog').slideDown();
     });
     socket.on('game cancel', function() {
       var html;
       html = "<p>-- game canceled --</p>";
       $(html).hide().prependTo('#chatlog').slideDown();
-      $('#reversi-board').off('click');
+      revClient.mouseEventOff();
+      return revClient = null;
+    });
+    socket.on('game result', function(res) {
+      var html;
+      html = "<p>-- game end --</p>";
+      $(html).hide().prependTo('#chatlog').slideDown();
+      html = "<p>" + res.result + ", black: " + res.black + ", white: " + res.white + "</p>";
+      $(html).hide().prependTo('#chatlog').slideDown();
+      revClient.mouseEventOff();
       return revClient = null;
     });
     socket.on('game turn', function(color) {
       var html;
       html = "<p>Your Turn: " + (color === ReversiRule.black ? 'black' : 'white') + "</p>";
-      $(html).hide().prependTo('#chatlog').slideDown();
-      return $('#reversi-board').on('click', function(event) {
-        console.log("click: " + event.pageX + ", " + event.pageY);
-        if (revClient) {
-          return revClient.mouseEvent(event.pageX, event.pageY);
-        }
-      });
+      return $(html).hide().prependTo('#chatlog').slideDown();
     });
     socket.on('response roomlist', function(res) {
       var html, idx, val, _results;
@@ -220,6 +235,19 @@
       }
       return _results;
     });
+    socket.on('game board update', function(res) {
+      console.log(res);
+      if (!revClient) {
+        return;
+      }
+      revClient._updateCallback(res);
+      return revClient.updateLog(res);
+    });
+    socket.on('game board submitted', function() {
+      if (revClient) {
+        return revClient._submittedCallback();
+      }
+    });
     $('#loginRoom').on('submit', function() {
       console.log("submit: " + $("#loginRoomName").val());
       socket.emit('room login', $('#loginRoomName').val());
@@ -228,6 +256,12 @@
     $('#logoutRoom').on('submit', function() {
       console.log("logout submit");
       return socket.emit('room logout');
+    });
+    $('#requestRoomList').on('submit', function() {
+      return socket.emit('request roomlist');
+    });
+    $('#deletelog').on('submit', function() {
+      return $('#chatlog').empty();
     });
     return socket.emit('request roomlist');
   });

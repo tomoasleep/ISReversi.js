@@ -12,15 +12,30 @@
   </head>
   <body>
     <div id="content">
-      <h3>Reversi Demo</h3>
-
       <div id="chat">
+        <h3>Reversi Demo</h3>
+        <p>使い方
+        <ol>
+          <li>下のボックスに部屋の名前を入力する</li>
+          <li>Login Roomを押すとログインできます。</li>
+          <li>他の人が部屋に入るとゲームが始まるので待ちましょう。</li>
+          <li>リバーシのボードが出てくるのでマスをクリックすると置けます。</li>
+          <li>ゲームが終わったらLogout Roomを押してログアウトしてください。</li>
+        </ol></p>
         <form id="loginRoom" onsubmit="return false">
           <input id="loginRoomName" type="text" autocomplete="off">
-          <input type="submit" value="Create or Enter">
+          <input type="submit" value="Login Room">
         </form>
         <form id="logoutRoom" onsubmit="return false">
-          <input type="submit" value="Delete Room" name="delete">
+          <input type="submit" value="Logout Room" name="delete">
+        </form>
+
+        <form id="requestRoomList" onsubmit="return false">
+          <input type="submit" value="Request RoomList" name="delete">
+        </form>
+
+        <form id="deletelog" onsubmit="return false">
+          <input type="submit" value="Delete log" name="delete">
         </form>
 
         <form id="demo" onsubmit="return false">

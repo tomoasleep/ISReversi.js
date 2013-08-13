@@ -65,7 +65,7 @@ describe 'ReversiServer', ->
     client.on 'connect', ->
       sid = @socket.sessionid
 
-      client.on 'loginRoomMsg', (msg) ->
+      client.on 'notice login', (msg) ->
         msg.roomname.should.equal(roomName)
 
         revServer._userStates[sid].state.
@@ -89,11 +89,11 @@ describe 'ReversiServer', ->
     client.on 'connect', ->
       sid = @socket.sessionid
 
-      client.on 'loginRoomMsg', (msg) ->
+      client.on 'notice login', (msg) ->
         console.log "login correct: #{msg.roomname}"
         client.emit 'room logout'
 
-      client.on 'logoutRoomMsg', (msg) ->
+      client.on 'notice logout', (msg) ->
         msg.roomname.should.equal(roomName)
 
         revServer._userStates[sid].state.
@@ -171,6 +171,43 @@ describe 'ReversiServer', ->
 
       tp.emit 'game board put', {x: 3, y: 4}
 
+  it 'turn notify'
+  ###
+    ,(done) ->
+    roomName = 'testroom3'
+    gameStandby roomName, (clients) ->
+      room = revServer._roomList[roomName]
+      count = 0
+
+      tp = turnPlayer(room, clients)
+
+      aftercare = ->
+        clients.forEach (e) ->
+          e.disconnect()
+        done()
+
+      clients.forEach (e) ->
+        e.on 'game board update', (res) ->
+          res.point.x.should.equal(3)
+          res.point.y.should.equal(4)
+          res.color.should.equal(Reversi.black)
+          res.revPoints[0].x.should.equal(4)
+          res.revPoints[0].y.should.equal(4)
+          if count++ >= 3
+            aftercare()
+
+        e.on 'game turn', (color) ->
+          console.log color
+          should.fail("must not send when not updated") if dontSend
+          if count++ >= 3
+            aftercare()
+
+      dontSend = true
+      tp.emit 'game board put', {x: 5, y: 5}
+      dontSend = false
+      tp.emit 'game board put', {x: 3, y: 4}
+  ###
+
   it 'game cancel', (done) ->
     roomName = 'cancelroom'
     gameStandby roomName, (clients) ->
@@ -187,7 +224,7 @@ describe 'ReversiServer', ->
           name.should.equal(roomName)
           check() if count++ == 3
 
-        e.on 'logoutRoomMsg', (msg) ->
+        e.on 'notice logout', (msg) ->
           msg.roomname.should.equal(roomName)
           check() if count++ == 3
 
@@ -208,6 +245,8 @@ describe 'ReversiServer', ->
       clients.forEach (e) ->
         e.on 'game result', (res) ->
           console.log res
+          res.black.should.equal(5)
+          res.white.should.equal(0)
           check() if count++ == 1
 
         e.on 'game board update', ->
@@ -216,5 +255,6 @@ describe 'ReversiServer', ->
       room.board.board[5][5] = Reversi.black
       tp = turnPlayer(room, clients)
       tp.emit 'game board put', {x: 3, y: 4}
+
 
 
