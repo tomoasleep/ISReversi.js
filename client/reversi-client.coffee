@@ -1,4 +1,6 @@
 
+socketURL = "http://27.120.104.78:3000"
+
 ReversiRule =
   white : -1
   black : 1
