@@ -1,5 +1,6 @@
 
 app = require('../../app')
+sioServer = app.sioServer
 revServer = app.revServer
 
 ReversiServer = require('../../controllers/reversi-server')
@@ -44,6 +45,9 @@ notTurnPlayer = (room, clients) ->
   return null
 
 describe 'ReversiServer', ->
+  beforeEach ->
+    revServer.clearMem()
+
   it 'connect', (done) ->
     client = io.connect(socketURL, options)
 
@@ -62,7 +66,7 @@ describe 'ReversiServer', ->
       sid = @socket.sessionid
 
       client.on 'loginRoomMsg', (msg) ->
-        msg.should.equal(roomName)
+        msg.roomname.should.equal(roomName)
 
         revServer._userStates[sid].state.
           should.equal('login')
@@ -80,24 +84,24 @@ describe 'ReversiServer', ->
 
   it 'logout (delete room and repsonse)', (done) ->
     client = io.connect(socketURL, options)
-    roomName = 'testroom'
+    roomName = 'testroom-logout'
 
     client.on 'connect', ->
       sid = @socket.sessionid
 
       client.on 'loginRoomMsg', (msg) ->
-        console.log "login correct: #{msg}"
-        client.emit 'room logout', msg 
+        console.log "login correct: #{msg.roomname}"
+        client.emit 'room logout'
 
       client.on 'logoutRoomMsg', (msg) ->
-        msg.should.equal(roomName)
+        msg.roomname.should.equal(roomName)
 
         revServer._userStates[sid].state.
           should.equal('waiting')
 
-        revServer._roomList[roomName].should.not.exist
+        should.not.exist(revServer._roomList[roomName])
 
-        console.log "logout correct: #{msg}"
+        console.log "logout correct: #{msg.roomname}"
         client.disconnect()
         done()
 
@@ -114,7 +118,7 @@ describe 'ReversiServer', ->
         gameStates[idx] = true
 
         if gameStates[0] = true && gameStates[1] = true
-          clients[2].emit('room login')
+          clients[2].emit('room login', roomName)
 
       if idx == 0
         setTimeout(doneCheck, 1800)
@@ -161,11 +165,56 @@ describe 'ReversiServer', ->
           res.revPoints[0].x.should.equal(4)
           res.revPoints[0].y.should.equal(4)
           if count++ == 1
+            clients.forEach (e) ->
+              e.disconnect()
             done()
 
       tp.emit 'game board put', {x: 3, y: 4}
 
-      
+  it 'game cancel', (done) ->
+    roomName = 'cancelroom'
+    gameStandby roomName, (clients) ->
+      count = 0
+
+      check = () ->
+        revServer._roomList[roomName].players.length.should.equal(1)
+        clients.forEach (e) ->
+          e.disconnect()
+        done()
+
+      clients.forEach (e) ->
+        e.on 'game cancel', (name) ->
+          name.should.equal(roomName)
+          check() if count++ == 3
+
+        e.on 'logoutRoomMsg', (msg) ->
+          msg.roomname.should.equal(roomName)
+          check() if count++ == 3
+
+      clients[0].emit 'room logout'
 
       
+  it 'game end', (done) ->
+    roomName = 'gameendroom'
+    gameStandby roomName, (clients) ->
+      room = revServer._roomList[roomName]
+      count = 0
+
+      check = () ->
+        clients.forEach (e) ->
+          e.disconnect()
+        done()
+
+      clients.forEach (e) ->
+        e.on 'game result', (res) ->
+          console.log res
+          check() if count++ == 1
+
+        e.on 'game board update', ->
+          console.log room.countStone()
+
+      room.board.board[5][5] = Reversi.black
+      tp = turnPlayer(room, clients)
+      tp.emit 'game board put', {x: 3, y: 4}
+
 

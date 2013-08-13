@@ -14,6 +14,7 @@ class UpdateStack
 class Reversi
   @black = 1
   @white = -1
+  @gameEnd = 0
 
   point = (x, y) -> x: x, y: y
 
@@ -44,8 +45,8 @@ class Reversi
     @board = (new Array(10) for _v in new Array(10))
     for val, i in @board
       for _v, j in val
-          if (0 < i && i < 9) && (0 < j && j < 9)
-            @board[i][j] = 0
+        if (0 < i && i < 9) && (0 < j && j < 9)
+          @board[i][j] = 0
 
     @board[4][4] = Reversi.white
     @board[5][5] = Reversi.white
@@ -57,6 +58,12 @@ class Reversi
 
   colorXY: (x, y) -> @board[x][y]
 
+  canPutCheck: ->
+    for x in [1..8]
+      for y in [1..8]
+        return true if @canPut(x, y, @turn)
+    false
+  
   put: (x, y, color) ->
     return null unless @turn == color && @canPut(x, y, color)
 
@@ -69,6 +76,13 @@ class Reversi
         @_reverseSeq.call(@, pt.x, pt.y, vector[i].x, vector[i].y, seqEnd.x, seqEnd.y)
 
     @turn = - @turn
+
+    count = 0
+
+    until @canPutCheck() || count++ > 1
+      @turn = - @turn
+    @turn = Reversi.gameEnd if count > 2
+
     @updateStack.newest()
     
   canPut: (x, y, color) ->
@@ -78,6 +92,19 @@ class Reversi
       seqEnd = @_findSeqEnd.call(@, pt.x, pt.y, vector[i].x, vector[i].y, color)
       return true if seqEnd
     false
+
+  isGameEnd: -> @turn == Reversi.gameEnd
+  countStone: ->
+    blackStones = 0
+    whiteStones = 0
+    for x in [1..8]
+      for y in [1..8]
+        blackStones++ if @colorXY(x, y) == Reversi.black
+        whiteStones++ if @colorXY(x, y) == Reversi.white
+
+    black: blackStones
+    white: whiteStones
+
 
 module.exports = Reversi
 

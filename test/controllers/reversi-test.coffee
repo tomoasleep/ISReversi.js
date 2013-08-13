@@ -67,3 +67,26 @@ describe 'Reversi', ->
       update = rev.put(3, 4, ReversiBoard.white)
       assert.equal null, update
 
+  describe 'countStone', ->
+    rev = null
+    beforeEach ->
+      rev = new ReversiBoard()
+
+    it 'put (3, 4, black)', ->
+      rev.put(3, 4, ReversiBoard.black)
+      stone = rev.countStone()
+      assert.equal 4, stone.black
+      assert.equal 1, stone.white
+
+    it 'put (3, 4, black)', ->
+      rev.board[5][5] = ReversiBoard.black
+      rev.put(3, 4, ReversiBoard.black)
+
+      stone = rev.countStone()
+      assert.equal 5, stone.black
+      assert.equal 0, stone.white
+
+      assert.equal true, rev.isGameEnd()
+
+
+

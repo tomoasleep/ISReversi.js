@@ -2,17 +2,24 @@
   "name": "ISreversi",
   "version": "0.0.1",
   "private": true,
+  "author": {
+      "name": "Tomoya Chiba",
+      "email": "tomo.asleep@gmail.com"
+  },
   "scripts": {
-    "start": "coffee app.coffee"
+    "start": "coffee -c -o public/javascripts client/* && coffee app.coffee",
+    "test": "mocha -R spec --compilers coffee:coffee-script test/**/*"
   },
   "dependencies": {
     "express": "3.3.4",
-    "mocha": "*",
-    "should": "*",
-    "superagent": "*",
-    "socket.io-client": "*",
     "ejs": "*",
     "coffee-script": "1.6.3",
     "socket.io": "0.9.16"
+  },
+  "devDependencies": {
+    "mocha": "*",
+    "should": "*",
+    "superagent": "*",
+    "socket.io-client": "*"
   }
 }

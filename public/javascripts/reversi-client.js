@@ -46,6 +46,7 @@
       this.renderStone(4, 5, ReversiRule.black);
       this.renderStone(5, 4, ReversiRule.black);
       this.canvas.save();
+      $(target).empty();
       this.canvas.appendTo(target);
       $(this.canvas.canvas).attr('id', id);
     }
@@ -178,18 +179,25 @@
     revClient = null;
     socket.on('loginRoomMsg', function(msg) {
       var html;
-      html = "<p>login:" + msg.roomname + " <= " + msg.username + "</p>";
+      html = "<p>login(room: " + msg.roomname + "): " + msg.username + "</p>";
       return $(html).hide().prependTo('#chatlog').slideDown();
     });
     socket.on('logoutRoomMsg', function(msg) {
       var html;
-      html = "<p>logout:" + msg.roomname + " <= " + msg.username + "</p>";
+      html = "<p>logout(room: " + msg.roomname + "): " + msg.username + "</p>";
       return $(html).hide().prependTo('#chatlog').slideDown();
     });
     socket.on('game standby', function() {
       var revInterface;
       revInterface = new ReversiInterface("#reversi-space", "reversi-board");
       return revClient = new ReversiClient(revInterface, socket);
+    });
+    socket.on('game cancel', function() {
+      var html;
+      html = "<p>-- game canceled --</p>";
+      $(html).hide().prependTo('#chatlog').slideDown();
+      $('#reversi-board').off('click');
+      return revClient = null;
     });
     socket.on('game turn', function(color) {
       var html;
@@ -217,7 +225,7 @@
       socket.emit('room login', $('#loginRoomName').val());
       return $('#loginRoomName').val('');
     });
-    $('#deleteRoom').on('submit', function() {
+    $('#logoutRoom').on('submit', function() {
       console.log("logout submit");
       return socket.emit('room logout');
     });

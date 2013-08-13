@@ -1,14 +1,14 @@
 ReversiBoard = require('./reversi')
 
 class ReversiRoom
-  constructor: () ->
-
-  state: 'waiting'
-  board: null
-  players: []
-  colors: [ReversiBoard.black, ReversiBoard.white]
+  constructor:  ->
+    @state = 'waiting'
+    @board = null
+    @players = []
+    @colors = [ReversiBoard.black, ReversiBoard.white]
 
   _addUser: (username) ->
+    console.log "players: #{@players} (length: #{@players.length})"
     if @players.length < 2
       if @players.indexOf(username) < 0
         @players.push username
@@ -16,15 +16,25 @@ class ReversiRoom
     false
 
   _removeUser: (username) ->
-    if @state == 'waiting' && @players.length < 2
-      if (idx = @players.indexOf(username)) >= 0
-        @players.splice(idx, 1)
-        return true
+    console.log "players: #{@players} (length: #{@players.length})"
+    if (idx = @players.indexOf(username)) >= 0
+      @players.splice(idx, 1)
+      console.log "players: #{@players} (length: #{@players.length})"
+      return true
     false
 
   turnPlayer: () ->
     idx = @colors.indexOf(@board.turn)
-    @players[idx]
+    if idx > -1 
+      @players[idx]
+    else
+      null
+
+  isGameEnd: ->
+    @board.isGameEnd()
+  
+  countStone: ->
+    @board.countStone()
 
   startGame: () ->
     return false unless @state == 'waiting' && @players.length == 2
@@ -35,6 +45,9 @@ class ReversiRoom
       @colors[0] = @colors[1]
       @colors[1] = tmp
     true
+
+  cancelGame: () ->
+    @state = 'waiting'
 
   putStone: (x, y, username) ->
     return null unless @state == 'game'
@@ -47,6 +60,11 @@ class ReversiRoom
     return null if idx < 0 || idx > 1
     @colors[idx]
 
+  findUserByColor: (color) ->
+    idx = @colors.indexOf(color)
+    return null if idx < 0 || idx > 1
+    @players[idx]
+
   @login: (room, username, callback) ->
     if !room then room = new ReversiRoom
     success = room._addUser(username)
@@ -57,7 +75,7 @@ class ReversiRoom
     success = false
     if room
       success = room._removeUser(username)
-      if room.players.length = 0 then room = undefined
+      if room.players.length == 0 then room = undefined
 
     if callback then callback(room, success)
 
@@ -65,8 +83,7 @@ class ReversiRoom
 
 class ReversiServer
   constructor: () ->
-    @_roomList = {}
-    @_userStates = {}
+    @clearMem()
     
   start: (@_sockets) ->
     self = @
@@ -75,14 +92,17 @@ class ReversiServer
       self._userStates[socket.id] = state: 'waiting'
 
       socket.on 'room login', (name) ->
+        console.log "received/login: #{name}, id: #{socket.id}"
         self.performLogin(name, socket)
 
-      socket.on 'room logout', (name) ->
-        self.performLogout(name, socket)
+      socket.on 'room logout', () ->
+        console.log "received/logout (id: #{socket.id})"
+        self.performLogout(socket)
  
       socket.on 'disconnect', ->
         if self._userStates[socket.id].state == 'login'
-          self.performLogout(self._userStates[socket.id].roomname, socket)
+          console.log "automatically logout: #{socket.id}"
+          self.performLogout(socket)
 
       socket.on 'game board put', (pt) ->
         room = self._userStates[socket.id].room
@@ -91,7 +111,11 @@ class ReversiServer
         self.performPutStone(pt.x, pt.y, socket)
 
       socket.on 'request roomlist', () ->
-        socket.emit('response roomlist', self.genRoomList())
+        socket.emit('response roomlist', self.genRoomListForMsg())
+
+  clearMem: ->
+    @_roomList = {}
+    @_userStates = {}
 
   performLogin: (name, socket) ->
     self = @
@@ -99,33 +123,48 @@ class ReversiServer
       self._roomList[name] = room
 
       if success
+        console.log "done/login room: #{name}, id: #{socket.id}"
         socket.join(name)
-        self._sockets.emit('loginRoomMsg', 
-          username: ReversiServer.mask socket.id
+        self._sockets.emit('loginRoomMsg',
+          username: ReversiServer.socketidMask socket.id
           roomname: name
         )
         self._userStates[socket.id] =
           state: 'login'
-          room: self._roomList[name]
+          room: room
           roomname: name
 
         if room.startGame()
           self._sockets.to(name).emit('game standby', name)
           self.sendTurnNotify(room)
+      else
+        console.log "fault/login room: #{name}, id: #{socket.id}"
 
-  performLogout: (name, socket) ->
+  performLogout: (socket) ->
     self = @
-    ReversiRoom.logout @_roomList[name], socket.id, (room, success) ->
-      self._roomList[name] = room
+
+    usrst = @_userStates[socket.id]
+    return unless usrst.state == 'login'
+    roomname = usrst.roomname
+
+    ReversiRoom.logout @_roomList[roomname], socket.id, (room, success) ->
+      self._roomList[roomname] = room
 
       if success
-        socket.leave(name)
-        self._sockets.emit('logoutRoomMsg',
-          username: ReversiServer.mask socket.id
-          roomname: name
-        )
+        console.log "done/logout room: #{roomname}, id: #{socket.id}"
+        if room && room.state == 'game'
+          room.cancelGame()
+          self._sockets.to(roomname).emit('game cancel', roomname)
+
+        socket.leave(roomname)
+        self._sockets.emit 'logoutRoomMsg',
+          username: ReversiServer.socketidMask socket.id
+          roomname: roomname
+
         self._userStates[socket.id] =
           state: 'waiting'
+      else
+        console.log "fault/logout room: #{roomname}, id: #{socket.id}"
  
   performPutStone: (x, y, socket) ->
     usrst = @_userStates[socket.id]
@@ -135,21 +174,39 @@ class ReversiServer
       console.log update
       console.log usrst.roomname
       @_sockets.to(usrst.roomname).emit('game board update', update) if update
-      @sendTurnNotify(usrst.room)
+      if usrst.room.isGameEnd()
+        @performGameEnd(usrst.room)
+      else
+        @sendTurnNotify(usrst.room)
     socket.emit('game board submitted')
 
-  sendTurnNotify: (room) ->
-      @_sockets.socket(room.turnPlayer()).emit('game turn', room.board.turn)
-  
+  performGameEnd: (room) ->
+    self = @
+    room.countStone()
+    stone = room.countStone
+    result = new Array(2)
+    if stone.white > stone.black
+      result = ['win', 'lose']
+    else if stone.black > stone.white
+      result = ['lose', 'win']
+    else
+      result = ['draw', 'draw']
+    [ReversiBoard.white, ReversiBoard.black].forEach (e, i) ->
+      self._sockets.socket(room.findUserByColor(e)).emit 'game result',
+        result: result[i]
+        black: stone.black
+        white: stone.white
 
-  genRoomList: () ->
+  sendTurnNotify: (room) ->
+    @_sockets.socket(room.turnPlayer()).emit('game turn', room.board.turn)
+
+  genRoomListForMsg: () ->
     for idx, val of @_roomList
       name: idx
       players: val.players if val
       
-  @mask: (str) ->
+  @socketidMask: (str) ->
     if str.length > 5 then str.slice(0, 4) + "*****" else str
 
- 
 module.exports = ReversiServer
 

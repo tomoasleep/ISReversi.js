@@ -10,7 +10,7 @@ ReversiServer = require("./controllers/reversi-server")
 
 app = express()
 server = module.exports = http.createServer(app)
-sioServer = socketIO.listen(server)
+sioServer = module.exports.sioServer = socketIO.listen(server)
 
 # all environments
 app.set "port", process.env.PORT or 3000

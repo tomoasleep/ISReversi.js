@@ -30,6 +30,7 @@ class ReversiInterface
     @renderStone(5, 4, ReversiRule.black)
 
     @canvas.save()
+    $(target).empty()
     @canvas.appendTo(target)
     $(@canvas.canvas).attr('id', id)
 
@@ -81,6 +82,7 @@ class ReversiClient
 
     @socket.on 'game board submitted', () ->
       self._submittedCallback()
+
     @_interface.beginKeyWait() if @_interface
 
   mouseEvent: (screenx, screeny) ->
@@ -110,7 +112,6 @@ class ReversiClient
   roomListRequest: () ->
     @socket.emit('request roomlist')
 
-
 $ ->
   socket = io.connect 'http://localhost:3000'
   revClient = null
@@ -126,6 +127,20 @@ $ ->
   socket.on 'game standby', ->
     revInterface = new ReversiInterface "#reversi-space", "reversi-board"
     revClient = new ReversiClient(revInterface, socket)
+
+  socket.on 'game cancel', ->
+    html = "<p>-- game canceled --</p>"
+    $(html).hide().prependTo('#chatlog').slideDown()
+    $('#reversi-board').off 'click'
+    revClient = null
+
+  socket.on 'game result', (res) ->
+    html = "<p>-- game ended --</p>"
+    $(html).hide().prependTo('#chatlog').slideDown()
+    html = "<p>#{res.result}, black: #{res.black}, white: #{res.white}</p>"
+    $(html).hide().prependTo('#chatlog').slideDown()
+    $('#reversi-board').off 'click'
+    revClient = null
 
   socket.on 'game turn', (color) ->
     html = "<p>Your Turn: #{if color == ReversiRule.black then 'black' else 'white'}</p>"
@@ -145,7 +160,7 @@ $ ->
     socket.emit 'room login', $('#loginRoomName').val()
     $('#loginRoomName').val('')
 
-  $('#deleteRoom').on 'submit', ->
+  $('#logoutRoom').on 'submit', ->
     console.log "logout submit"
     socket.emit 'room logout'
 
