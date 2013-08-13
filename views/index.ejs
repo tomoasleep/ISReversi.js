@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+    <link rel="stylesheet" type="text/css" href="/styleseets/style.css" />
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/javascripts/jquery-2.0.3.js"></script>
+    <script src="/javascripts/canvasquery.min.js"></script>
+    <!--<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>-->
+    <script src="/javascripts/reversi-client.js"></script>
+    <title>Welcome</title>
+  </head>
+  <body>
+    <div id="content">
+      <!-- <h1>Welcome to your new realtime app!</h1> -->
+
+      <!-- QUICK CHAT DEMO-->
+      <div id="chat">
+        <form id="demo" onsubmit="return false">
+          <h3>Quick Chat Demo</h3>
+          <div id="chatlog"></div>
+          <input id="myMessage" type="text" autocomplete="off">
+        </form>
+
+        <form id="loginRoom" onsubmit="return false">
+          <input id="loginRoomName" type="text" autocomplete="off">
+          <input type="submit" value="Create or Enter">
+        </form>
+        <form id="logoutRoom" onsubmit="return false">
+          <input type="submit" value="Delete Room" name="delete">
+        </form>
+      </div>
+      <div id="reversi-space"></div>
+    </div>
+  </body>
+</html>

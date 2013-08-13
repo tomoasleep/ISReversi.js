@@ -1,0 +1,8 @@
+<p>
+<%= update.color == black ? "black" : "white" %>
+<%= "(" + update.point.x + ", " + update.point.y + ")" %>
+<ol>
+<% update.revPoints.forEach( function(v) {%>
+<li><%= "(" + v.x + ", " + v.y + ")" %></li>
+<% }) %>
+</ol></p>
