@@ -120,7 +120,8 @@ class ReversiServer
   performLogin: (name, socket) ->
     self = @
     usrst = @_userStates[socket.id]
-    return if usrst && usrst.status == 'login'
+    return if usrst && usrst.state == 'login'
+
     ReversiRoom.login @_roomList[name], socket.id, (room, success) ->
       self._roomList[name] = room
 

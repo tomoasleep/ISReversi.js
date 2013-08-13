@@ -81,6 +81,29 @@ describe 'ReversiServer', ->
 
       client.emit 'room login', roomName
 
+  it 'login (cannot login duality)', (done) ->
+    client = io.connect(socketURL, options)
+    roomName1 = 'testroomone'
+    roomName2 = 'testroomtwo'
+    count = 0
+
+    client.on 'connect', ->
+      sid = @socket.sessionid
+
+      client.on 'notice login', (msg) ->
+        count++
+        revServer._userStates[sid].state.
+          should.equal('login')
+
+      check = ->
+        count.should.equal 1
+        client.disconnect()
+        done()
+
+      setTimeout(check, 1000)
+      client.emit 'room login', roomName1
+      client.emit 'room login', roomName2
+
 
   it 'logout (delete room and repsonse)', (done) ->
     client = io.connect(socketURL, options)
