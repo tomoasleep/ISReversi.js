@@ -117,7 +117,7 @@ class ReversiClient
     $(interfaceId).off 'click'
 
 $ ->
-  socket = io.connect 'http://localhost:3000'
+  socket = io.connect socketURL
   revClient = null
 
   socket.on 'notice login', (msg) ->
