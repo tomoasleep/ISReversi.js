@@ -1,6 +1,4 @@
 
-socketURL = "http://27.120.104.78:3000"
-
 ReversiRule =
   white : -1
   black : 1
@@ -117,7 +115,9 @@ class ReversiClient
     interfaceId = "##{@_interface.id}"
     $(interfaceId).off 'click'
 
-$ ->
+window.clientStandby = (socketURL) ->
+  socketURL = socketURL || "http://localhost:3000"
+
   socket = io.connect socketURL
   revClient = null
 
