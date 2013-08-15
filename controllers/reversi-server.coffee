@@ -19,11 +19,12 @@ class ReversiRoom
     console.log "players: #{@players} (length: #{@players.length})"
     if (idx = @players.indexOf(username)) >= 0
       @players.splice(idx, 1)
-      console.log "players: #{@players} (length: #{@players.length})"
+      console.log "removed:: players: #{@players} (length: #{@players.length})"
       return true
     false
 
   turnPlayer: () ->
+    return null unless @state == 'game'
     idx = @colors.indexOf(@board.turn)
     if idx > -1 
       @players[idx]
@@ -32,6 +33,34 @@ class ReversiRoom
 
   isGameEnd: ->
     @board.isGameEnd()
+
+  gameResult: ->
+    self = @
+
+    result = {}
+    @players.forEach (username) ->
+      result[username] = self.playerResult(username)
+    result
+
+  playerResult: (username) ->
+    userColor = @getColor(username)
+    stone = @board.countStone()
+
+    wl = new Array(2)
+    if stone.white > stone.black
+      wl = ['win', 'lose']
+    else if stone.white < stone.black
+      wl = ['lose', 'win']
+    else
+      wl = ['draw', 'draw']
+
+    idx = [ReversiBoard.white, ReversiBoard.black].indexOf(userColor)
+      
+    result =
+      color: userColor
+      issue: wl[idx]
+      black: stone.black
+      white: stone.white
   
   countStone: ->
     @board.countStone()
@@ -49,12 +78,6 @@ class ReversiRoom
   cancelGame: () ->
     @state = 'waiting'
 
-  putStone: (x, y, username) ->
-    return null unless @state == 'game'
-    console.log "putStone x: #{x}, y: #{y}, color: #{@getColor(username)}"
-
-    @board.put(x, y, @getColor(username))
-
   getColor: (username) ->
     idx = @players.indexOf(username)
     return null if idx < 0 || idx > 1
@@ -65,153 +88,213 @@ class ReversiRoom
     return null if idx < 0 || idx > 1
     @players[idx]
 
+  move: (username, x, y) ->
+    return null unless @state == 'game'
+    console.log "move x: #{x}, y: #{y}, color: #{@getColor(username)}"
+    update = @board.put(x, y, @getColor(username))
+
+    result =
+      success: update != null
+      update: update
+      gameEnd: @isGameEnd()
+      nextTurnPlayer: @turnPlayer()
+      nextColor: @board.turn
+
   @login: (room, username, callback) ->
     if !room then room = new ReversiRoom
-    success = room._addUser(username)
+    status =
+      success: room._addUser(username)
+      gameStart: room.startGame()
+      nextTurnPlayer: room.turnPlayer()
+      nextColor: room.board.turn if room.board
 
-    if callback then callback(room, success)
+    callback(room, status) if callback
 
   @logout: (room, username, callback) ->
     success = false
+    cancelflag = false
     if room
       success = room._removeUser(username)
-      if room.players.length == 0 then room = undefined
+      cancelflag = true if room.state == 'game'
+      room = undefined if room.players.length == 0
 
-    if callback then callback(room, success)
+    status = 
+      success: success
+      gameCancel: success && cancelflag
+
+    room.cancelGame() if room && status.gameCancel 
+    if callback then callback(room, status)
 
   @states: ['waiting', 'game']
 
 class ReversiServer
   constructor: () ->
     @clearMem()
-    
-  start: (@_sockets) ->
-    self = @
-
-    @_sockets.on 'connection', (socket) ->
-      self._userStates[socket.id] = state: 'waiting'
-
-      socket.on 'room login', (name) ->
-        console.log "received/login: #{name}, id: #{socket.id}"
-        self.performLogin(name, socket)
-
-      socket.on 'room logout', () ->
-        console.log "received/logout (id: #{socket.id})"
-        self.performLogout(socket)
- 
-      socket.on 'disconnect', ->
-        if self._userStates[socket.id].state == 'login'
-          console.log "automatically logout: #{socket.id}"
-          self.performLogout(socket)
-
-      socket.on 'game board put', (pt) ->
-        room = self._userStates[socket.id].room
-        color = if room then room.getColor(socket.id) else null
-        console.log "put: #{pt.x}, #{pt.y}, #{color}"
-        self.performPutStone(pt.x, pt.y, socket)
-
-      socket.on 'request roomlist', () ->
-        socket.emit('response roomlist', self.genRoomListForMsg())
 
   clearMem: ->
     @_roomList = {}
-    @_userStates = {}
+    @_userInfo = {}
+    @_connectors = []
 
-  performLogin: (name, socket) ->
-    self = @
-    usrst = @_userStates[socket.id]
-    return if usrst && usrst.state == 'login'
+  userInfo: (username) ->
+    @_userInfo[username]
+  
+  roomInfo: (roomname) ->
+    @_roomList[roomname]
+ 
+  connectors: ->
+    @_connectors
 
-    ReversiRoom.login @_roomList[name], socket.id, (room, success) ->
-      self._roomList[name] = room
+  registerConnector: (connector) ->
+    @_connectors.push connector
 
-      if success
-        console.log "done/login room: #{name}, id: #{socket.id}"
-        socket.join(name)
-        self._sockets.emit('notice login',
-          username: ReversiServer.socketidMask socket.id
-          roomname: name
-        )
-        self._userStates[socket.id] =
-          state: 'login'
-          room: room
-          roomname: name
+  register: (username, client, connector, options) ->
+    @_userInfo[username] =
+      state: {type: 'waiting'}
+      client: client
+      connector: connector
+      options: options
 
-        if room.startGame()
-          self._sockets.to(name).emit('game standby', name)
-          self.sendTurnNotify(room)
-      else
-        console.log "fault/login room: #{name}, id: #{socket.id}"
-
-  performLogout: (socket) ->
+  login: (username, roomname) ->
     self = @
 
-    usrst = @_userStates[socket.id]
-    return unless usrst.state == 'login'
-    roomname = usrst.roomname
+    info = @_userInfo[username]
+    return @fail(username, 'login failed') if info && info.state.type == 'login'
+    maskedName = @maskName(username)
 
-    ReversiRoom.logout @_roomList[roomname], socket.id, (room, success) ->
+    ReversiRoom.login @_roomList[roomname], username, (room, status) ->
       self._roomList[roomname] = room
 
-      if success
-        console.log "done/logout room: #{roomname}, id: #{socket.id}"
-        if room && room.state == 'game'
-          room.cancelGame()
-          self._sockets.to(roomname).emit('game cancel', roomname)
+      if status.success
+        self._userInfo[username].state = 
+          type: 'login'
+          roomname: roomname
+        self.requestJoinGroup(username, roomname)
 
-        socket.leave(roomname)
-        self._sockets.emit 'notice logout',
-          username: ReversiServer.socketidMask socket.id
+        self.requestNoticeAll 'login',
+          username: maskedName
           roomname: roomname
 
-        self._userStates[socket.id] =
-          state: 'waiting'
+        if status.gameStart
+          self.requestNoticeToGroup roomname, 'game standby',
+            roomname: roomname
+
+          self.requestNotice status.nextTurnPlayer, 'game turn',
+            color: status.nextColor
+        console.log "done/login room: #{roomname}, id: #{username}"
       else
-        console.log "fault/logout room: #{roomname}, id: #{socket.id}"
- 
-  performPutStone: (x, y, socket) ->
-    usrst = @_userStates[socket.id]
-    console.log usrst.state
-    if usrst.state == 'login'
-      update = usrst.room.putStone(x, y, socket.id)
-      console.log update
-      console.log usrst.roomname
-      @_sockets.to(usrst.roomname).emit('game board update', update) if update
-      if usrst.room.isGameEnd()
-        @performGameEnd(usrst.room)
-      else if update
-        @sendTurnNotify(usrst.room)
-    socket.emit('game board submitted')
+        self.fail(username, 'login failed')
+        console.log "fault/login room: #{roomname}, id: #{username}"
 
-  performGameEnd: (room) ->
+  logout: (username) ->
     self = @
-    room.countStone()
-    stone = room.countStone()
-    console.log stone
 
-    result = new Array(2)
-    if stone.white > stone.black
-      result = ['win', 'lose']
-    else if stone.white < stone.black
-      result = ['lose', 'win']
-    else
-      result = ['draw', 'draw']
-    [ReversiBoard.white, ReversiBoard.black].forEach (e, i) ->
-      self._sockets.socket(room.findUserByColor(e)).emit 'game result', 
-        result: result[i]
-        black: stone.black
-        white: stone.white
+    info = @_userInfo[username]
+    unless info && info.state.type == 'login'
+      return self.fail(username, 'logout failed') 
+    maskedName = @maskName(username)
 
-  sendTurnNotify: (room) ->
-    @_sockets.socket(room.turnPlayer()).emit('game turn', room.board.turn)
+    roomname = info.state.roomname
+    ReversiRoom.logout @_roomList[roomname], username, (room, status) ->
+      self._roomList[roomname] = room
+
+      if status.success
+        self._userInfo[username].state =
+          type: 'waiting'
+
+        self.requestNoticeAll 'logout',
+          username: maskedName
+          roomname: roomname
+
+        if status.gameCancel
+          self.requestNoticeToGroup roomname, 'game cancel',
+            roomname: roomname
+
+        self.requestLeaveGroup(username, roomname)
+        console.log "done/logout room: #{roomname}, id: #{username}"
+
+      else
+        self.fail(username, 'logout failed') 
+        console.log "fault/logout room: #{roomname}, id: #{username}"
+
+  disconnect: (username) -> @logout(username)
+
+  move: (username, x, y) ->
+    info = @_userInfo[username]
+    switch info.state.type 
+      when 'login'
+        roomname = info.state.roomname
+        room = @_roomList[roomname]
+
+        result = room.move(username, x, y)
+
+        if result.success
+          @requestNoticeToGroup roomname, 'game update',
+            result.update
+
+          if result.gameEnd
+            @noticeGameEnd(roomname)
+          else
+            @requestNotice result.nextTurnPlayer, 'game turn',
+              color: result.nextColor
+    @requestNotice username, 'move submitted',
+      success: result.success
+
+  fail: (username, msg) ->
+    @requestNotice username, msg
+
+  noticeGameEnd: (roomname) ->
+    room = @_roomList[roomname]
+    results = room.gameResult()
+    for username, result of results
+      @requestNotice username, 'game end', 
+        result
+
+  requestNoticeAll: (type, data) ->
+    @_connectors.forEach (connector) ->
+      connector.noticeAll(type, data)
+   
+  requestNoticeToGroup: (groupname, type, data) ->
+    @_connectors.forEach (connector) ->
+      connector.noticeToGroup(groupname, type, data)
+
+  requestNotice: (username, type, data) ->
+    cinfo = @findConnectInfo(username)
+    cinfo.connector.notice(cinfo.client, type, data)
+
+  requestJoinGroup: (username, groupname) ->
+    cinfo = @findConnectInfo(username)
+    cinfo.connector.joinGroup(cinfo.client, groupname)
+
+  requestLeaveGroup: (username, groupname) ->
+    cinfo = @findConnectInfo(username)
+    cinfo.connector.leaveGroup(cinfo.client, groupname)
+
+  findConnectInfo: (username) ->
+    client: @_userInfo[username].client
+    connector: @_userInfo[username].connector
+
+  noticeRoomlist: (username) ->
+    roomlist = @genRoomListForMsg()
+    console.log roomlist
+    @requestNotice username, 'roomlist',
+      roomlist: roomlist
 
   genRoomListForMsg: () ->
     for idx, val of @_roomList
-      name: idx
-      players: val.players if val
-      
-  @socketidMask: (str) ->
-    if str.length > 5 then str.slice(0, 4) + "*****" else str
+      if val
+        name: idx
+        players: val.players
+
+  maskName: (username) ->
+    info = @_userInfo[username]
+    if info.options && info.options.maskName
+      ReversiServer.genMaskName(username)
+    else
+      username
+
+  @genMaskName: (str) ->
+    if str.length > 5 then str.slice(0, 5) + "*****" else str
 
 module.exports = ReversiServer
 

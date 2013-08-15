@@ -68,7 +68,9 @@ class ReversiInterface
     @canvas.save
 
   beginKeyWait: () -> canKeyWait = true
-  stopKeyWait: () -> canKeyWait = false
+  stopKeyWait: () -> 
+    setTimeout(@beginKeyWait, 5000)
+    canKeyWait = false
 
 class ReversiClient
 
@@ -82,15 +84,11 @@ class ReversiClient
 
   sendCommand: (px, py) ->
     console.log "put: (x: #{px}, y: #{py})"
-    @socket.emit('game board put', {x: px, y: py})
+    @socket.emit('game move', {x: px, y: py})
 
   updateLog: (update) ->
     html = "<p>#{if update.color == ReversiRule.black then "black" else "white" }: "
     html += "(#{update.point.x}, #{update.point.y})</p>"
-    # update.revPoints.forEach (v) ->
-    #   html += "<li>(#{v.x}, #{v.y})</li>"
-    # html += "</p>"
-    # console.log html
     $(html).hide().prependTo('#chatlog').slideDown()
 
   _updateCallback: (res) ->
@@ -142,30 +140,30 @@ window.clientStandby = (socketURL) ->
     revClient.mouseEventOff()
     revClient = null
 
-  socket.on 'game result', (res) ->
+  socket.on 'game end', (res) ->
     html = "<p>-- game end --</p>"
     $(html).hide().prependTo('#chatlog').slideDown()
-    html = "<p>#{res.result}, black: #{res.black}, white: #{res.white}</p>"
+    html = "<p>#{res.issue}, black: #{res.black}, white: #{res.white}</p>"
     $(html).hide().prependTo('#chatlog').slideDown()
     revClient.mouseEventOff()
     revClient = null
 
-  socket.on 'game turn', (color) ->
-    html = "<p>Your Turn: #{if color == ReversiRule.black then 'black' else 'white'}</p>"
+  socket.on 'game turn', (res) ->
+    html = "<p>Your Turn: #{if res.color == ReversiRule.black then 'black' else 'white'}</p>"
     $(html).hide().prependTo('#chatlog').slideDown()
 
-  socket.on 'response roomlist', (res) ->
+  socket.on 'roomlist', (res) ->
     for idx, val of res
       html = "<p>#{val.name}: #{val.players}</p>"
       $(html).hide().prependTo('#chatlog').slideDown()
 
-  socket.on 'game board update', (res) ->
+  socket.on 'game update', (res) ->
     console.log res
     return unless revClient
     revClient._updateCallback(res)
     revClient.updateLog(res)
 
-  socket.on 'game board submitted', () ->
+  socket.on 'move submitted', () ->
     revClient._submittedCallback() if revClient
 
   $('#loginRoom').on 'submit', ->

@@ -1,283 +1,281 @@
-
-app = require('../../app')
-sioServer = app.sioServer
-revServer = app.revServer
-
 ReversiServer = require('../../controllers/reversi-server')
 Reversi = require('../../controllers/reversi')
-io = require('socket.io-client')
-should = require('should')
-request = require('superagent')
+chai = require('chai')
+chai.should()
 
-options =
-  transports: ['websocket']
-  'force new connection': true
+class TestConnector
+  constructor: (@operator) ->
+    @operator.registerConnector(@)
 
-socketURL = 'http://localhost:3000'
+  joinGroup: ->
+    @joinfunc.apply(this, arguments) if @joinfunc
 
-gameStandby = (roomName, callback) ->
-  clients = new Array(2)
+  leaveGroup: ->
+    @leavefunc.apply(this, arguments) if @leavefunc
 
-  clients[0] = io.connect(socketURL, options)
-  clients[0].on 'connect', ->
-    clients[1] = io.connect(socketURL, options)
-    clients[1].on 'connect', ->
+  notice: ->
+    @noticefunc.apply(this, arguments) if @noticefunc
 
-      clients[0].on 'game standby', ->
-        clients[1].on 'game standby', ->
-          callback(clients)
+  noticeToGroup: ->
+    @noticeToGroupfunc.apply(this, arguments) if @noticeToGroupfunc
 
-      for i in [0..1]
-        clients[i].emit('room login', roomName)
-
-turnPlayer = (room, clients) ->
-  tp = room.turnPlayer()
-  for i in [0..clients.length - 1]
-    if clients[i].socket.sessionid == tp
-      return clients[i]
-  return null
-
-notTurnPlayer = (room, clients) ->
-  tp = room.turnPlayer()
-  for i in [0..clients.length - 1]
-    if clients[i].socket.sessionid != tp
-      return clients[i]
-  return null
+  noticeAll: ->
+    @noticeAllfunc.apply(this, arguments) if @noticeAllfunc
 
 describe 'ReversiServer', ->
+
+  testConnector = null
+  revServer = null
+
   beforeEach ->
-    revServer.clearMem()
+    revServer = new ReversiServer()
+    testConnector = new TestConnector(revServer)
+  
+  it 'registerConnector', ->
+    revServer.connectors().length.should.eql(1)
 
-  it 'connect', (done) ->
-    client = io.connect(socketURL, options)
+  it 'register', ->
+    username = 'testuser'
+    testClient = 
+      id: "test"
 
-    client.on 'connect', ->
-      sid = @socket.sessionid
+    revServer.register(username, testClient, testConnector)
 
-      revServer._userStates[sid].state.should.equal('waiting')
-      client.disconnect()
-      done()
+    info = revServer.userInfo(username)
 
-  it 'login (create room and response)', (done) ->
-    client = io.connect(socketURL, options)
-    roomName = 'testroom'
+    info.state.type.should.eql('waiting')
+    info.client.should.eql(testClient)
+    info.connector.should.eql(testConnector)
 
-    client.on 'connect', ->
-      sid = @socket.sessionid
+  describe 'login', ->
+    it 'login (create room and response)', (done) ->
+      username = 'testuser'
+      roomname = 'testroom'
+      testClient = 
+        id: "test"
 
-      client.on 'notice login', (msg) ->
-        msg.roomname.should.equal(roomName)
-
-        revServer._userStates[sid].state.
-          should.equal('login')
-
-        revServer._userStates[sid].roomname.
-          should.equal(roomName)
-
-        revServer._roomList[roomName].should.exist
-          
-        client.disconnect()
+      testConnector.noticeAllfunc = (type, data) ->
+        type.should.eql 'login'
+        data.username.should.eql username
+        data.roomname.should.eql roomname
         done()
 
-      client.emit 'room login', roomName
+      revServer.register(username, testClient, testConnector)
+      revServer.login(username, roomname)
 
-  it 'login (cannot login duality)', (done) ->
-    client = io.connect(socketURL, options)
-    roomName1 = 'testroomone'
-    roomName2 = 'testroomtwo'
-    count = 0
+    it 'double login', (done) ->
+      username = 'testuser'
+      roomname = 'testroom'
+      roomname2 = 'testroom2'
+      testClient = 
+        id: "test"
+      count = 0
 
-    client.on 'connect', ->
-      sid = @socket.sessionid
+      testConnector.noticeAllfunc = (type, data) ->
+        type.should.eql 'login'
+        data.username.should.eql username
+        data.roomname.should.eql roomname
+        done() if count++ > 0
 
-      client.on 'notice login', (msg) ->
-        count++
-        revServer._userStates[sid].state.
-          should.equal('login')
+      testConnector.noticefunc = (client, type, data) ->
+        client.should.eql testClient
+        type.should.eql 'login failed'
+        done() if count++ > 0
+
+      revServer.register(username, testClient, testConnector)
+      revServer.login(username, roomname)
+      revServer.login(username, roomname2)
+
+  describe 'logout', ->
+    it 'login and logout', (done) ->
+      username = 'testuser'
+      roomname = 'testroom'
+      testClient = 
+        id: "test"
+      count = 0
+
+      testConnector.noticeAllfunc = (type, data) ->
+        switch type
+          when 'login'
+            data.username.should.eql username
+            data.roomname.should.eql roomname
+            count++
+          when 'logout'
+            data.username.should.eql username
+            data.roomname.should.eql roomname
+            done() if count++ > 0
+
+      revServer.register(username, testClient, testConnector)
+      revServer.login(username, roomname)
+      revServer.logout(username, roomname)
+    it 'cannot logout before login', (done) ->
+      username = 'testuser'
+      roomname = 'testroom'
+      testClient = 
+        id: "test"
+      count = 0
+
+      testConnector.noticefunc = (client, type, data) ->
+        type.should.eql 'logout failed'
+        done() 
+
+      revServer.register(username, testClient, testConnector)
+      revServer.logout(username, roomname)
+
+  describe 'gamestart', ->
+    it 'gamestart', (done) ->
+      usernames = ['testuser1', 'testuser2']
+      roomname = 'testroom'
+      testClients = [{id: "test1"}, {id: "test2"}] 
+      count = 0
+
+      testConnector.noticeAllfunc = (type, data) ->
+        switch type
+          when 'login'
+            switch data.username
+              when usernames[0]
+                console.log arguments
+                data.roomname.should.be.eql roomname
+                done() if count++ > 2
+              when usernames[1]
+                data.roomname.should.be.eql roomname
+                done() if count++ > 2
+
+      testConnector.noticeToGroupfunc = (groupname, type, data) ->
+        switch type
+          when 'game standby'
+            data.roomname.should.eql roomname
+            done() if count++ > 2
+
+      testConnector.noticefunc = (client, type, data) ->
+        type.should.eql 'game turn'
+        data.color.should.eql Reversi.black
+        done() if count++ > 2
+
+      revServer.register(usernames[0], testClients[0], testConnector)
+      revServer.register(usernames[1], testClients[1], testConnector)
+      revServer.login(usernames[0], roomname)
+      revServer.login(usernames[1], roomname)
+
+    it 'gamecancel', (done) ->
+      usernames = ['testuser1', 'testuser2']
+      roomname = 'testroom'
+      testClients = [{id: "test1"}, {id: "test2"}] 
+      count = 0
 
       check = ->
-        count.should.equal 1
-        client.disconnect()
+        room = revServer.roomInfo(roomname)
+        room.state.should.eql 'waiting'
         done()
 
-      setTimeout(check, 1000)
-      client.emit 'room login', roomName1
-      client.emit 'room login', roomName2
+      testConnector.noticeToGroupfunc = (groupname, type, data) ->
+        switch type
+          when 'game standby'
+            data.roomname.should.eql roomname
+            check() if count++ > 0
+          when 'game cancel'
+            data.roomname.should.eql roomname
+            check() if count++ > 0
 
+      revServer.register(usernames[0], testClients[0], testConnector)
+      revServer.register(usernames[1], testClients[1], testConnector)
+      revServer.login(usernames[0], roomname)
+      revServer.login(usernames[1], roomname)
+      revServer.logout(usernames[0], roomname)
 
-  it 'logout (delete room and repsonse)', (done) ->
-    client = io.connect(socketURL, options)
-    roomName = 'testroom-logout'
-
-    client.on 'connect', ->
-      sid = @socket.sessionid
-
-      client.on 'notice login', (msg) ->
-        console.log "login correct: #{msg.roomname}"
-        client.emit 'room logout'
-
-      client.on 'notice logout', (msg) ->
-        msg.roomname.should.equal(roomName)
-
-        revServer._userStates[sid].state.
-          should.equal('waiting')
-
-        should.not.exist(revServer._roomList[roomName])
-
-        console.log "logout correct: #{msg.roomname}"
-        client.disconnect()
-        done()
-
-      client.emit 'room login', roomName
-
-  it 'startGame', (done) ->
-    clients = new Array(3)
-    roomName = 'testroom'
-    sids = new Array(3)
-    gameStates = [false, false, false]
-    
-    checker = (idx) ->
-      clients[idx].on 'game standby', ->
-        gameStates[idx] = true
-
-        if gameStates[0] = true && gameStates[1] = true
-          clients[2].emit('room login', roomName)
-
-      if idx == 0
-        setTimeout(doneCheck, 1800)
-      
-    doneCheck = () ->
-      gameStates[0].should.equal(true)
-      gameStates[1].should.equal(true)
-      gameStates[2].should.equal(false)
-      for i in [0..2]
-        clients[i].disconnect()
-      done()
-
-    clients[0] = io.connect(socketURL, options)
-    clients[0].on 'connect', ->
-      sids[0] = @socket.sessionid
-      checker(0)
-
-      clients[1] = io.connect(socketURL, options)
-      clients[1].on 'connect', ->
-        sids[1] = @socket.sessionid
-        checker(1)
-
-        clients[2] = io.connect(socketURL, options)
-        clients[2].on 'connect', ->
-          sids[2] = @socket.sessionid
-          checker(2)
-
-          clients[0].emit('room login', roomName)
-          clients[1].emit('room login', roomName)
-
-  it 'put Stone', (done) ->
-    roomName = 'testroom2'
-    gameStandby roomName, (clients) ->
-      room = revServer._roomList[roomName]
+  describe 'move', ->
+    it 'move', (done) ->
+      usernames = ['testuser1', 'testuser2']
+      roomname = 'testroom'
+      testClients = [{id: "test1"}, {id: "test2"}] 
       count = 0
+      turnCount = 0
 
-      tp = turnPlayer(room, clients)
+      testConnector.noticeToGroupfunc = (groupname, type, data) ->
+        groupname.should.eql(roomname)
+        switch type
+          when 'game standby'
+            data.roomname.should.eql roomname
+            done() if count++ > 1
+          when 'game update'
+            data.point.x.should.eql(3)
+            data.point.y.should.eql(4)
+            data.color.should.eql(Reversi.black)
+            data.revPoints[0].x.should.eql(4)
+            data.revPoints[0].y.should.eql(4)
+            done() if count++ > 1
 
-      clients.forEach (e) ->
-        e.on 'game board update', (res) ->
-          res.point.x.should.equal(3)
-          res.point.y.should.equal(4)
-          res.color.should.equal(Reversi.black)
-          res.revPoints[0].x.should.equal(4)
-          res.revPoints[0].y.should.equal(4)
-          if count++ == 1
-            clients.forEach (e) ->
-              e.disconnect()
-            done()
+      testConnector.noticefunc = (client, type, data) ->
+        switch type
+          when 'game turn'
+            if turnCount++ == 0
+              data.color.should.eql Reversi.black
+              idx = if client.id == 'test1' then 0 else 1
+              revServer.move(usernames[idx], 3, 4)
+            else
+              data.color.should.eql Reversi.white
+          when 'move submitted'
+            data.success.should.eql true
+            done() if count++ > 1
 
-      tp.emit 'game board put', {x: 3, y: 4}
+      revServer.register(usernames[0], testClients[0], testConnector)
+      revServer.register(usernames[1], testClients[1], testConnector)
+      revServer.login(usernames[0], roomname)
+      revServer.login(usernames[1], roomname)
 
-  it 'turn notify'
-  ###
-    ,(done) ->
-    roomName = 'testroom3'
-    gameStandby roomName, (clients) ->
-      room = revServer._roomList[roomName]
+    it 'gameEnd', (done) ->
+      usernames = ['testuser1', 'testuser2']
+      roomname = 'testroom'
+      testClients = [{id: "test1"}, {id: "test2"}] 
       count = 0
+      turnCount = 0
 
-      tp = turnPlayer(room, clients)
+      turnPlayer = new Array(2)
 
-      aftercare = ->
-        clients.forEach (e) ->
-          e.disconnect()
-        done()
+      check =  ->
+        if count++ > 1
+          done()
+          # room = revServer.roomInfo(roomname)
 
-      clients.forEach (e) ->
-        e.on 'game board update', (res) ->
-          res.point.x.should.equal(3)
-          res.point.y.should.equal(4)
-          res.color.should.equal(Reversi.black)
-          res.revPoints[0].x.should.equal(4)
-          res.revPoints[0].y.should.equal(4)
-          if count++ >= 3
-            aftercare()
+      testConnector.noticeToGroupfunc = (groupname, type, data) ->
+        groupname.should.eql(roomname)
+        switch type
+          when 'game update'
+            data.point.x.should.eql(3)
+            data.point.y.should.eql(4)
+            data.color.should.eql(Reversi.black)
+            data.revPoints[0].x.should.eql(4)
+            data.revPoints[0].y.should.eql(4)
+            check()
 
-        e.on 'game turn', (color) ->
-          console.log color
-          should.fail("must not send when not updated") if dontSend
-          if count++ >= 3
-            aftercare()
+      testConnector.noticefunc = (client, type, data) ->
+        switch type
+          when 'game turn'
+            if turnCount++ == 0
+              room = revServer.roomInfo(roomname)
 
-      dontSend = true
-      tp.emit 'game board put', {x: 5, y: 5}
-      dontSend = false
-      tp.emit 'game board put', {x: 3, y: 4}
-  ###
+              data.color.should.eql Reversi.black
+              turnPlayer[0] = if client.id == 'test1' then 0 else 1
+              turnPlayer[1] = 1 - turnPlayer[0]
+              
+              room.board.board[5][5] = Reversi.black
+              revServer.move(usernames[turnPlayer[0]], 3, 4)
+            else
+              data.color.should.eql Reversi.white
+          when 'game end'
+            switch client.id
+              when testClients[turnPlayer[0]].id
+                data.color.should.eql Reversi.black
+                data.issue.should.eql 'win'
+              when testClients[turnPlayer[1]].id
+                data.color.should.eql Reversi.white
+                data.issue.should.eql 'lose'
+            data.black.should.eql(5)
+            data.white.should.eql(0)
+            check()
 
-  it 'game cancel', (done) ->
-    roomName = 'cancelroom'
-    gameStandby roomName, (clients) ->
-      count = 0
-
-      check = () ->
-        revServer._roomList[roomName].players.length.should.equal(1)
-        clients.forEach (e) ->
-          e.disconnect()
-        done()
-
-      clients.forEach (e) ->
-        e.on 'game cancel', (name) ->
-          name.should.equal(roomName)
-          check() if count++ == 3
-
-        e.on 'notice logout', (msg) ->
-          msg.roomname.should.equal(roomName)
-          check() if count++ == 3
-
-      clients[0].emit 'room logout'
-
-      
-  it 'game end', (done) ->
-    roomName = 'gameendroom'
-    gameStandby roomName, (clients) ->
-      room = revServer._roomList[roomName]
-      count = 0
-
-      check = () ->
-        clients.forEach (e) ->
-          e.disconnect()
-        done()
-
-      clients.forEach (e) ->
-        e.on 'game result', (res) ->
-          console.log res
-          res.black.should.equal(5)
-          res.white.should.equal(0)
-          check() if count++ == 1
-
-        e.on 'game board update', ->
-          console.log room.countStone()
-
-      room.board.board[5][5] = Reversi.black
-      tp = turnPlayer(room, clients)
-      tp.emit 'game board put', {x: 3, y: 4}
-
-
+      revServer.register(usernames[0], testClients[0], testConnector)
+      revServer.register(usernames[1], testClients[1], testConnector)
+      revServer.login(usernames[0], roomname)
+      revServer.login(usernames[1], roomname)
 
