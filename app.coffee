@@ -16,7 +16,8 @@ sioServer = module.exports.sioServer = socketIO.listen(server)
 
 # all environments
 app.set "port", process.env.PORT or 3000
-app.set "url", process.env.SERVER_URL or "http://localhost:3000"
+app.set "tcp_port", process.env.TCP_PORT or 4000
+app.set "url", process.env.SERVER_URL or "localhost"
 app.set "views", __dirname + "/views"
 app.set "view engine", "ejs"
 app.use express.favicon()
@@ -30,7 +31,10 @@ app.use express.static(path.join(__dirname, "public"))
 app.use express.errorHandler()  if "development" is app.get("env")
 
 app.get "/", (req, res) ->
-  res.render "index", {url: app.get("url")}
+  res.render "index", 
+    url: app.get("url")
+    port: app.get("port")
+    tcp_port: app.get("tcp_port")
 
 server.listen app.get("port"), ->
   console.log "Express server listening on port " + app.get("port")
@@ -40,4 +44,4 @@ revServer = module.exports.revServer = new ReversiServer()
 sioConnector = module.exports.sioConnector = new SocketIOConnector(revServer)
 sioConnector.start(sioServer.sockets)
 tcpConnector = new TcpConnector(revServer)
-tcpConnector.start(4000)
+tcpConnector.start(app.get "tcp_port")
