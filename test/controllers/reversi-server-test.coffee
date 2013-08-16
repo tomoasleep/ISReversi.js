@@ -263,16 +263,16 @@ describe 'ReversiServer', ->
             switch client.id
               when testClients[turnPlayer[0]].id
                 data.color.should.eql Reversi.black
-                data.issue.should.eql 'Win'
+                data.issue.should.eql 'WIN'
               when testClients[turnPlayer[1]].id
                 data.color.should.eql Reversi.white
-                data.issue.should.eql 'Lose'
+                data.issue.should.eql 'LOSE'
             data.black.should.eql(5)
             data.white.should.eql(0)
             check()
 
-      revServer.register(usernames[0], testClients[0], testConnector)
-      revServer.register(usernames[1], testClients[1], testConnector)
+      revServer.register(usernames[0], testClients[0], testConnector, autoPass: true)
+      revServer.register(usernames[1], testClients[1], testConnector, autoPass: true)
       revServer.login(usernames[0], roomname)
       revServer.login(usernames[1], roomname)
 

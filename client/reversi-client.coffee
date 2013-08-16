@@ -1,7 +1,7 @@
 
 ReversiRule =
-  white : -1
   black : 1
+  white : -1
 
 # updateStones = {posPoint: Stone, revpoints: [Stone]}
 

@@ -5,13 +5,17 @@ class ReversiRoom
     @state = 'waiting'
     @board = null
     @players = []
+    @options = {}
+    @illigalPlayer = null
+    @illigalReason = null
     @colors = [ReversiBoard.black, ReversiBoard.white]
 
-  _addUser: (username) ->
+  _addUser: (username, options) ->
     console.log "players: #{@players} (length: #{@players.length})"
     if @players.length < 2
       if @players.indexOf(username) < 0
         @players.push username
+        @options[username] = options
         return true
     false
 
@@ -19,9 +23,11 @@ class ReversiRoom
     console.log "players: #{@players} (length: #{@players.length})"
     if (idx = @players.indexOf(username)) >= 0
       @players.splice(idx, 1)
+      delete @options[username]
       console.log "removed:: players: #{@players} (length: #{@players.length})"
-      return true
-    false
+      true
+    else
+      false
 
   turnPlayer: () ->
     return null unless @state == 'game'
@@ -33,6 +39,10 @@ class ReversiRoom
 
   isGameEnd: ->
     @board.isGameEnd()
+
+  illigalMoveGameEnd: (username)->
+    @illigalPlayer = username
+    @board.gameEnd()
 
   gameResult: ->
     self = @
@@ -46,19 +56,28 @@ class ReversiRoom
     userColor = @getColor(username)
     stone = @board.countStone()
 
-    wl = new Array(2)
-    if stone.white > stone.black
-      wl = ['Win', 'Lose']
-    else if stone.white < stone.black
-      wl = ['Lose', 'Win']
+    issue = null
+    reason = null
+    if @illigalPlayer
+      issue = if @illigalPlayer == username then 'LOSE' else 'WIN'
+      reason = @illigalReason
     else
-      wl = ['Tie', 'Tie']
+      wl = new Array(2)
+      if stone.white > stone.black
+        wl = ['WIN', 'LOSE']
+      else if stone.white < stone.black
+        wl = ['LOSE', 'WIN']
+      else
+        wl = ['TIE', 'TIE']
 
-    idx = [ReversiBoard.white, ReversiBoard.black].indexOf(userColor)
-      
+      idx = [ReversiBoard.white, ReversiBoard.black].indexOf(userColor)
+      issue = wl[idx]
+      reason = "DOUBLE_PASS"
+
     result =
       color: userColor
-      issue: wl[idx]
+      issue: issue 
+      reason: reason
       black: stone.black
       white: stone.white
   
@@ -67,12 +86,23 @@ class ReversiRoom
 
   startGame: () ->
     return false unless @state == 'waiting' && @players.length == 2
+    @illigalPlayer = null
     @state = 'game'
-    @board = new ReversiBoard()
     if Math.random() > 0.5
       tmp = @colors[0]
       @colors[0] = @colors[1]
       @colors[1] = tmp
+
+    blackplayer = @findUserByColor(ReversiBoard.black)
+    whiteplayer = @findUserByColor(ReversiBoard.white)
+
+    ap = @options[blackplayer].autoPass || @options[whiteplayer].autoPass
+    autoPassFlag = 
+      black: ap
+      white: ap
+
+    @board = new ReversiBoard(autoPassFlag)
+
     true
 
   cancelGame: () ->
@@ -91,23 +121,45 @@ class ReversiRoom
   move: (username, x, y) ->
     return null unless @state == 'game'
     console.log "move x: #{x}, y: #{y}, color: #{@getColor(username)}"
-    update = @board.put(x, y, @getColor(username))
+    result = @board.put(x, y, @getColor(username))
+
+    update = if result then result.update else null
+    autoPass = if result then result.autoPass else 0
+    success = update != null
+    if !success && @options[username].illigalMoveLose
+      @illigalMoveGameEnd(username,"ILLEGAL_MOVE")
 
     result =
-      success: update != null
+      success: success 
       update: update
+      autoPass: autoPass
       gameEnd: @isGameEnd()
       nextTurnPlayer: @turnPlayer()
       nextColor: @board.turn
+
+  pass: (username) ->
+    return {success: false} unless @turnPlayer() == username
+    result = @board.pass()
+
+    if !result.success && @options[username].illigalMoveLose
+      @illigalMoveGameEnd(username, "ILLEGAL_MOVE")
+
+    result =
+      success: result.success
+      autoPass: result.autoPass
+      gameEnd: @isGameEnd()
+      nextTurnPlayer: @turnPlayer()
+      nextColor: @board.turn
+
 
   _gameStartInfo: ->
     players: @players
     nextTurnPlayer: @turnPlayer()
     nextColor: @board.turn
 
-  @login: (room, username, callback) ->
+  @login: (room, username, options, callback) ->
     if !room then room = new ReversiRoom
-    success = room._addUser(username)
+    success = room._addUser(username, options)
     isGameStart = room.startGame()
     status =
       success: success 
@@ -168,7 +220,7 @@ class ReversiServer
     return @fail(username, 'login failed') if info && info.state.type == 'login'
     maskedName = @maskName(username)
 
-    ReversiRoom.login @_roomList[roomname], username, (room, status) ->
+    ReversiRoom.login @_roomList[roomname], username, info.options, (room, status) ->
       console.log status
       self._roomList[roomname] = room
 
@@ -234,30 +286,38 @@ class ReversiServer
       when 'login'
         roomname = info.state.roomname
         room = @_roomList[roomname]
-
-        result = room.move(username, x, y)
-
-        if result.success
-          @requestNoticeToGroup roomname, 'game update',
-            update: result.update
-            username: username
-            isLastTurn: result.gameEnd
-
-            if result.gameEnd
-              @noticeGameEnd(roomname)
-            else
-              @requestNotice result.nextTurnPlayer, 'game turn',
-                color: result.nextColor
-        else if info.options.loseIlligalMove
-          console.log "lose"
-          # lose
+        
+        result = if x && y then room.move(username, x, y) else room.pass(username)
+        console.log result
+        console.log arguments
 
         @moveResponseNotice(username, result.success)
+        if result.success
+          if result.update
+            @requestNoticeToGroup roomname, 'game update',
+              update: result.update
+              username: username
+              isLastTurn: result.gameEnd
+          else
+            @requestNoticeToGroup roomname, 'game pass',
+              username: username
+              isLastTurn: result.gameEnd
+
+          if result.autoPass > 0
+            @requestNoticeToGroup roomname, 'game autopass',
+              username: username 
+              isLastTurn: result.gameEnd
+
+          if result.gameEnd
+            @noticeGameEnd(roomname)
+          else
+            @requestNotice result.nextTurnPlayer, 'game turn',
+              color: result.nextColor
       else
         @moveResponseNotice(username, false)
-
+ 
   pass: (username) ->
-    @moveResponseNotice(username, true)
+    @move(username, null, null)
 
   moveResponseNotice: (username, success) ->
     @requestNotice username, 'move submitted',

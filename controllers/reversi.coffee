@@ -41,7 +41,9 @@ class Reversi
     else
       false
 
-  constructor: (first) ->
+  constructor: (@autoPassFlags) ->
+    @autoPassFlags = @autoPassFlags || {black: true, white: true}
+    @passCount = 0
     @board = (new Array(10) for _v in new Array(10))
     for val, i in @board
       for _v, j in val
@@ -53,7 +55,7 @@ class Reversi
     @board[4][5] = Reversi.black
     @board[5][4] = Reversi.black
 
-    @turn = first || Reversi.black
+    @turn = Reversi.black
     @updateStack = null
 
   colorXY: (x, y) -> @board[x][y]
@@ -66,6 +68,7 @@ class Reversi
   
   put: (x, y, color) ->
     return null unless @turn == color && @canPut(x, y, color)
+    @passCount = 0
 
     @updateStack = new UpdateStack(point(x, y), color, @updateStack)
     @board[x][y] = color
@@ -79,12 +82,29 @@ class Reversi
 
     count = 0
 
-    until @canPutCheck() || count++ > 1
-      @turn = - @turn
-    @turn = Reversi.gameEnd if count > 2
+    autoPassCount = @autoPass()
+    { update: @updateStack.newest(), autoPass: autoPassCount }
 
-    @updateStack.newest()
-    
+  pass: ->
+    unless @canPutCheck()
+      if @passCount++ > 0
+        @turn = Reversi.gameEnd
+        {success: true, autoPass: 0}
+      else
+        @turn = - @turn
+        autoPassCount = @autoPass()
+        {success: true, autoPass: autoPassCount}
+    else
+      {success: false, autoPass: 0}
+  
+  autoPass: ->
+    colorKey = if @turn == Reversi.black then 'black' else 'white'
+    if @autoPassFlags[colorKey]
+      unless @turn == Reversi.gameEnd
+        result = @pass()
+        return if result.success then result.autoPass + 1 else result.autoPass
+    return 0
+
   canPut: (x, y, color) ->
     return false unless @colorXY(x, y) == 0
     vector = surrounds(0, 0)
@@ -94,6 +114,8 @@ class Reversi
     false
 
   isGameEnd: -> @turn == Reversi.gameEnd
+  gameEnd: -> @turn = Reversi.gameEnd
+
   countStone: ->
     blackStones = 0
     whiteStones = 0

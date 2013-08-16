@@ -21,6 +21,7 @@ class SocketIOConnector
 
     @operator.register username, socket, self,
       maskName: true
+      autoPass: true
 
     # self._userStates[socket.id] = state: 'waiting'
 

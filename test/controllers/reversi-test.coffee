@@ -55,7 +55,7 @@ describe 'Reversi', ->
       rev = new ReversiBoard()
 
     it 'put (3, 4, black)', ->
-      update = rev.put(3, 4, ReversiBoard.black)
+      update = rev.put(3, 4, ReversiBoard.black).update
       assert.equal 3, update.point.x
       assert.equal 4, update.point.y
       assert.equal ReversiBoard.black, update.color
@@ -64,8 +64,8 @@ describe 'Reversi', ->
       assert.equal 4, update.revPoints[0].y
 
     it 'put (3, 4, white)', ->
-      update = rev.put(3, 4, ReversiBoard.white)
-      assert.equal null, update
+      result = rev.put(3, 4, ReversiBoard.white)
+      assert.equal null, result
 
   describe 'countStone', ->
     rev = null
@@ -84,6 +84,44 @@ describe 'Reversi', ->
 
       stone = rev.countStone()
       assert.equal 5, stone.black
+      assert.equal 0, stone.white
+
+      assert.equal true, rev.isGameEnd()
+    it 'pass', ->
+      rev = new ReversiBoard
+        black: false
+        white: false
+
+      rev.board[4][4] = ReversiBoard.black
+      rev.board[5][5] = ReversiBoard.black
+
+      res1 = rev.pass()
+      res2 = rev.pass()
+
+      stone = rev.countStone()
+
+      assert.equal 0, res1.autoPass
+      assert.equal 0, res2.autoPass
+
+      assert.equal 4, stone.black
+      assert.equal 0, stone.white
+
+      assert.equal true, rev.isGameEnd()
+    it 'auto pass', ->
+      rev = new ReversiBoard
+        black: false
+        white: true
+
+      rev.board[4][4] = ReversiBoard.black
+      rev.board[5][5] = ReversiBoard.black
+
+      res = rev.pass()
+
+      console.log res
+      assert.equal 1, res.autoPass
+
+      stone = rev.countStone()
+      assert.equal 4, stone.black
       assert.equal 0, stone.white
 
       assert.equal true, rev.isGameEnd()

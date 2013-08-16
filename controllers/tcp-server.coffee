@@ -36,21 +36,27 @@ class TcpConnector
     socket.on 'close', ->
       console.log "server-> close connection #{socket.remoteAddress}:#{socket.remotePort}"
       self.operator.disconnect client.username if client.username
-
+    
+    socket.on 'error', ->
+      console.log "error occured"
+      # console.log arguments
+      self.operator.disconnect client.username if client.username
+      self.end
 
   doCommand: (com, client) ->
     switch com.command
       when 'OPEN'
-        username = com.args[0]
 
-        nameSplit = username.split(",") 
+        nameSplit = com.args[0].split(":") 
         console.log nameSplit
-        roomname = if nameSplit.length > 1 then roomname = nameSplit[0] else username
+        roomname = if nameSplit.length > 1 then nameSplit[0] else nameSplit[0]
+        username = if nameSplit.length > 1 then nameSplit[1] else nameSplit[0]
 
         client.username = username
         @clients[username] = client
         @operator.register username, client, this,
-          loseIlligalMove: true
+          illigalMoveLose: true
+          autoPass: false
         @operator.login username, roomname 
 
       when 'MOVE'
@@ -99,14 +105,20 @@ class TcpConnector
         unless username == data.username || data.isLastTurn
           ptstr = TcpConnector.convertPos(data.update.point.x, data.update.point.y)
           client.socket.write "MOVE #{ptstr}\n"
+      when 'game pass'
+        unless username == data.username || data.isLastTurn
+          client.socket.write "MOVE PASS\n"
+      when 'game autopass'
+        if username == data.username && !data.isLastTurn
+          client.socket.write "MOVE PASS\n"
       when 'move submitted'
         if data.success
           client.socket.write "ACK 60000\n"
       when 'game end'
         if data.color == Reversi.black
-          client.socket.write "END #{data.issue} #{data.black} #{data.white} DOUBLE_PASS\n"
+          client.socket.write "END #{data.issue} #{data.black} #{data.white} #{data.reason}\n"
         else
-          client.socket.write "END #{data.issue} #{data.white} #{data.black} DOUBLE_PASS\n"
+          client.socket.write "END #{data.issue} #{data.white} #{data.black} #{data.reason}\n"
         client.socket.write "BYE\n"
         
   @parser: (buffer, str) ->
