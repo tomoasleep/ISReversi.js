@@ -8,7 +8,7 @@ http = require("http")
 path = require("path")
 ReversiServer = require("./controllers/reversi-server")
 SocketIOConnector = require("./controllers/socketio-connector")
-TcpConnector = require("./controllers/tcp-server")
+TcpConnector = require("./controllers/tcp-connector")
 
 app = express()
 server = module.exports = http.createServer(app)

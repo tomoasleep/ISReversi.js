@@ -1,4 +1,4 @@
-TcpConnector = require('../../controllers/tcp-server')
+TcpConnector = require('../../controllers/tcp-connector')
 net = require('net')
 chai = require('chai')
 chai.should()
