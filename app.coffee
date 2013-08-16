@@ -8,6 +8,7 @@ http = require("http")
 path = require("path")
 ReversiServer = require("./controllers/reversi-server")
 SocketIOConnector = require("./controllers/socketio-connector")
+TcpConnector = require("./controllers/tcp-server")
 
 app = express()
 server = module.exports = http.createServer(app)
@@ -35,6 +36,8 @@ server.listen app.get("port"), ->
   console.log "Express server listening on port " + app.get("port")
 
 revServer = module.exports.revServer = new ReversiServer()
+
 sioConnector = module.exports.sioConnector = new SocketIOConnector(revServer)
 sioConnector.start(sioServer.sockets)
-
+tcpConnector = new TcpConnector(revServer)
+tcpConnector.start(4000)

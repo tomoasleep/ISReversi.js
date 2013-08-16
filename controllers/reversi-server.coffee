@@ -48,11 +48,11 @@ class ReversiRoom
 
     wl = new Array(2)
     if stone.white > stone.black
-      wl = ['win', 'lose']
+      wl = ['Win', 'Lose']
     else if stone.white < stone.black
-      wl = ['lose', 'win']
+      wl = ['Lose', 'Win']
     else
-      wl = ['draw', 'draw']
+      wl = ['Tie', 'Tie']
 
     idx = [ReversiBoard.white, ReversiBoard.black].indexOf(userColor)
       
@@ -100,13 +100,19 @@ class ReversiRoom
       nextTurnPlayer: @turnPlayer()
       nextColor: @board.turn
 
+  _gameStartInfo: ->
+    players: @players
+    nextTurnPlayer: @turnPlayer()
+    nextColor: @board.turn
+
   @login: (room, username, callback) ->
     if !room then room = new ReversiRoom
+    success = room._addUser(username)
+    isGameStart = room.startGame()
     status =
-      success: room._addUser(username)
-      gameStart: room.startGame()
-      nextTurnPlayer: room.turnPlayer()
-      nextColor: room.board.turn if room.board
+      success: success 
+      gameStart: isGameStart
+      gameInfo: room._gameStartInfo() if isGameStart
 
     callback(room, status) if callback
 
@@ -153,7 +159,7 @@ class ReversiServer
       state: {type: 'waiting'}
       client: client
       connector: connector
-      options: options
+      options: options || {}
 
   login: (username, roomname) ->
     self = @
@@ -163,6 +169,7 @@ class ReversiServer
     maskedName = @maskName(username)
 
     ReversiRoom.login @_roomList[roomname], username, (room, status) ->
+      console.log status
       self._roomList[roomname] = room
 
       if status.success
@@ -178,9 +185,9 @@ class ReversiServer
         if status.gameStart
           self.requestNoticeToGroup roomname, 'game standby',
             roomname: roomname
-
-          self.requestNotice status.nextTurnPlayer, 'game turn',
-            color: status.nextColor
+            players: status.gameInfo.players
+            nextTurnPlayer: status.gameInfo.nextTurnPlayer
+            nextColor: status.gameInfo.nextColor
         console.log "done/login room: #{roomname}, id: #{username}"
       else
         self.fail(username, 'login failed')
@@ -197,6 +204,7 @@ class ReversiServer
     roomname = info.state.roomname
     ReversiRoom.logout @_roomList[roomname], username, (room, status) ->
       self._roomList[roomname] = room
+      delete self._roomList[roomname] unless room
 
       if status.success
         self._userInfo[username].state =
@@ -221,6 +229,7 @@ class ReversiServer
 
   move: (username, x, y) ->
     info = @_userInfo[username]
+    return @moveResponseNotice(username, false) unless info
     switch info.state.type 
       when 'login'
         roomname = info.state.roomname
@@ -230,15 +239,29 @@ class ReversiServer
 
         if result.success
           @requestNoticeToGroup roomname, 'game update',
-            result.update
+            update: result.update
+            username: username
+            isLastTurn: result.gameEnd
 
-          if result.gameEnd
-            @noticeGameEnd(roomname)
-          else
-            @requestNotice result.nextTurnPlayer, 'game turn',
-              color: result.nextColor
+            if result.gameEnd
+              @noticeGameEnd(roomname)
+            else
+              @requestNotice result.nextTurnPlayer, 'game turn',
+                color: result.nextColor
+        else if info.options.loseIlligalMove
+          console.log "lose"
+          # lose
+
+        @moveResponseNotice(username, result.success)
+      else
+        @moveResponseNotice(username, false)
+
+  pass: (username) ->
+    @moveResponseNotice(username, true)
+
+  moveResponseNotice: (username, success) ->
     @requestNotice username, 'move submitted',
-      success: result.success
+      success: success
 
   fail: (username, msg) ->
     @requestNotice username, msg
@@ -264,11 +287,11 @@ class ReversiServer
 
   requestJoinGroup: (username, groupname) ->
     cinfo = @findConnectInfo(username)
-    cinfo.connector.joinGroup(cinfo.client, groupname)
+    cinfo.connector.joinGroup(username, cinfo.client, groupname)
 
   requestLeaveGroup: (username, groupname) ->
     cinfo = @findConnectInfo(username)
-    cinfo.connector.leaveGroup(cinfo.client, groupname)
+    cinfo.connector.leaveGroup(username, cinfo.client, groupname)
 
   findConnectInfo: (username) ->
     client: @_userInfo[username].client

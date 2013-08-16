@@ -41,10 +41,10 @@ class SocketIOConnector
     socket.on 'request roomlist', () ->
       self.operator.noticeRoomlist username
 
-  joinGroup: (client, groupname) ->
+  joinGroup: (username, client, groupname) ->
     client.join(groupname)
 
-  leaveGroup: (client, groupname) ->
+  leaveGroup: (username, client, groupname) ->
     client.leave(groupname)
 
   noticeAll: (type, data) ->
@@ -73,13 +73,16 @@ class SocketIOConnector
         client.emit 'game standby',
           name: data.name
 
+        client.socket(data.nextTurnPlayer).emit 'game turn',
+          color: data.nextColor
+
       when 'game cancel'
         client.emit 'game cancel',
           name: data.name
 
       when 'game update'
         client.emit 'game update',
-          data
+          data.update
           # point: data.point
           # color: data.color
           # revPoints: data.revPoints

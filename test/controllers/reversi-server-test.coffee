@@ -129,28 +129,28 @@ describe 'ReversiServer', ->
       testClients = [{id: "test1"}, {id: "test2"}] 
       count = 0
 
+      check = ->
+        done() if count++ > 1
+
       testConnector.noticeAllfunc = (type, data) ->
+        console.log arguments
         switch type
           when 'login'
             switch data.username
               when usernames[0]
-                console.log arguments
                 data.roomname.should.be.eql roomname
-                done() if count++ > 2
+                check()
               when usernames[1]
                 data.roomname.should.be.eql roomname
-                done() if count++ > 2
+                check()
 
       testConnector.noticeToGroupfunc = (groupname, type, data) ->
+        console.log arguments
         switch type
           when 'game standby'
             data.roomname.should.eql roomname
-            done() if count++ > 2
-
-      testConnector.noticefunc = (client, type, data) ->
-        type.should.eql 'game turn'
-        data.color.should.eql Reversi.black
-        done() if count++ > 2
+            data.nextColor.should.eql Reversi.black
+            check()
 
       revServer.register(usernames[0], testClients[0], testConnector)
       revServer.register(usernames[1], testClients[1], testConnector)
@@ -189,34 +189,33 @@ describe 'ReversiServer', ->
       roomname = 'testroom'
       testClients = [{id: "test1"}, {id: "test2"}] 
       count = 0
-      turnCount = 0
+
+      check = ->
+        done() if count++ > 1
 
       testConnector.noticeToGroupfunc = (groupname, type, data) ->
         groupname.should.eql(roomname)
         switch type
           when 'game standby'
             data.roomname.should.eql roomname
-            done() if count++ > 1
+            data.nextColor.should.eql Reversi.black
+            revServer.move(data.nextTurnPlayer, 3, 4)
+            check()
           when 'game update'
-            data.point.x.should.eql(3)
-            data.point.y.should.eql(4)
-            data.color.should.eql(Reversi.black)
-            data.revPoints[0].x.should.eql(4)
-            data.revPoints[0].y.should.eql(4)
-            done() if count++ > 1
+            data.update.point.x.should.eql(3)
+            data.update.point.y.should.eql(4)
+            data.update.color.should.eql(Reversi.black)
+            data.update.revPoints[0].x.should.eql(4)
+            data.update.revPoints[0].y.should.eql(4)
+            check()
 
       testConnector.noticefunc = (client, type, data) ->
         switch type
           when 'game turn'
-            if turnCount++ == 0
-              data.color.should.eql Reversi.black
-              idx = if client.id == 'test1' then 0 else 1
-              revServer.move(usernames[idx], 3, 4)
-            else
-              data.color.should.eql Reversi.white
+            data.color.should.eql Reversi.white
           when 'move submitted'
             data.success.should.eql true
-            done() if count++ > 1
+            check()
 
       revServer.register(usernames[0], testClients[0], testConnector)
       revServer.register(usernames[1], testClients[1], testConnector)
@@ -228,7 +227,6 @@ describe 'ReversiServer', ->
       roomname = 'testroom'
       testClients = [{id: "test1"}, {id: "test2"}] 
       count = 0
-      turnCount = 0
 
       turnPlayer = new Array(2)
 
@@ -240,36 +238,35 @@ describe 'ReversiServer', ->
       testConnector.noticeToGroupfunc = (groupname, type, data) ->
         groupname.should.eql(roomname)
         switch type
+          when 'game standby'
+            room = revServer.roomInfo(roomname)
+
+            data.nextColor.should.eql Reversi.black
+            turnPlayer[0] = if data.nextTurnPlayer == 'testuser1' then 0 else 1
+            turnPlayer[1] = 1 - turnPlayer[0]
+
+            room.board.board[5][5] = Reversi.black
+            revServer.move(data.nextTurnPlayer, 3, 4)
           when 'game update'
-            data.point.x.should.eql(3)
-            data.point.y.should.eql(4)
-            data.color.should.eql(Reversi.black)
-            data.revPoints[0].x.should.eql(4)
-            data.revPoints[0].y.should.eql(4)
+            data.update.point.x.should.eql(3)
+            data.update.point.y.should.eql(4)
+            data.update.color.should.eql(Reversi.black)
+            data.update.revPoints[0].x.should.eql(4)
+            data.update.revPoints[0].y.should.eql(4)
             check()
 
       testConnector.noticefunc = (client, type, data) ->
         switch type
           when 'game turn'
-            if turnCount++ == 0
-              room = revServer.roomInfo(roomname)
-
-              data.color.should.eql Reversi.black
-              turnPlayer[0] = if client.id == 'test1' then 0 else 1
-              turnPlayer[1] = 1 - turnPlayer[0]
-              
-              room.board.board[5][5] = Reversi.black
-              revServer.move(usernames[turnPlayer[0]], 3, 4)
-            else
-              data.color.should.eql Reversi.white
+            data.color.should.eql Reversi.white
           when 'game end'
             switch client.id
               when testClients[turnPlayer[0]].id
                 data.color.should.eql Reversi.black
-                data.issue.should.eql 'win'
+                data.issue.should.eql 'Win'
               when testClients[turnPlayer[1]].id
                 data.color.should.eql Reversi.white
-                data.issue.should.eql 'lose'
+                data.issue.should.eql 'Lose'
             data.black.should.eql(5)
             data.white.should.eql(0)
             check()
