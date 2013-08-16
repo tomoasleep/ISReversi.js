@@ -11,7 +11,6 @@ class ReversiRoom
     @colors = [ReversiBoard.black, ReversiBoard.white]
 
   _addUser: (username, options) ->
-    console.log "players: #{@players} (length: #{@players.length})"
     if @players.length < 2
       if @players.indexOf(username) < 0
         @players.push username
@@ -20,11 +19,9 @@ class ReversiRoom
     false
 
   _removeUser: (username) ->
-    console.log "players: #{@players} (length: #{@players.length})"
     if (idx = @players.indexOf(username)) >= 0
       @players.splice(idx, 1)
       delete @options[username]
-      console.log "removed:: players: #{@players} (length: #{@players.length})"
       true
     else
       false
@@ -40,8 +37,9 @@ class ReversiRoom
   isGameEnd: ->
     @board.isGameEnd()
 
-  illigalMoveGameEnd: (username)->
+  illigalMoveGameEnd: (username, reason) ->
     @illigalPlayer = username
+    @illigalReason = reason
     @board.gameEnd()
 
   gameResult: ->
@@ -96,10 +94,10 @@ class ReversiRoom
     blackplayer = @findUserByColor(ReversiBoard.black)
     whiteplayer = @findUserByColor(ReversiBoard.white)
 
-    ap = @options[blackplayer].autoPass || @options[whiteplayer].autoPass
+    # ap = @options[blackplayer].autoPass || @options[whiteplayer].autoPass
     autoPassFlag = 
-      black: ap
-      white: ap
+      black: @options[blackplayer].autoPass
+      white: @options[whiteplayer].autoPass
 
     @board = new ReversiBoard(autoPassFlag)
 
@@ -120,12 +118,14 @@ class ReversiRoom
 
   move: (username, x, y) ->
     return null unless @state == 'game'
-    console.log "move x: #{x}, y: #{y}, color: #{@getColor(username)}"
     result = @board.put(x, y, @getColor(username))
 
     update = if result then result.update else null
     autoPass = if result then result.autoPass else 0
     success = update != null
+    gameEnd = @isGameEnd()
+    @state = 'waiting' if gameEnd
+
     if !success && @options[username].illigalMoveLose
       @illigalMoveGameEnd(username,"ILLEGAL_MOVE")
 
@@ -133,13 +133,15 @@ class ReversiRoom
       success: success 
       update: update
       autoPass: autoPass
-      gameEnd: @isGameEnd()
+      gameEnd: gameEnd
       nextTurnPlayer: @turnPlayer()
       nextColor: @board.turn
 
   pass: (username) ->
     return {success: false} unless @turnPlayer() == username
     result = @board.pass()
+    gameEnd = @isGameEnd()
+    @state = 'waiting' if gameEnd
 
     if !result.success && @options[username].illigalMoveLose
       @illigalMoveGameEnd(username, "ILLEGAL_MOVE")
@@ -147,7 +149,7 @@ class ReversiRoom
     result =
       success: result.success
       autoPass: result.autoPass
-      gameEnd: @isGameEnd()
+      gameEnd: gameEnd
       nextTurnPlayer: @turnPlayer()
       nextColor: @board.turn
 
@@ -221,7 +223,6 @@ class ReversiServer
     maskedName = @maskName(username)
 
     ReversiRoom.login @_roomList[roomname], username, info.options, (room, status) ->
-      console.log status
       self._roomList[roomname] = room
 
       if status.success
@@ -288,8 +289,6 @@ class ReversiServer
         room = @_roomList[roomname]
         
         result = if x && y then room.move(username, x, y) else room.pass(username)
-        console.log result
-        console.log arguments
 
         @moveResponseNotice(username, result.success)
         if result.success
@@ -359,7 +358,6 @@ class ReversiServer
 
   noticeRoomlist: (username) ->
     roomlist = @genRoomListForMsg()
-    console.log roomlist
     @requestNotice username, 'roomlist',
       roomlist: roomlist
 
