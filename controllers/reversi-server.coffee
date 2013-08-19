@@ -1,4 +1,5 @@
 ReversiBoard = require('./reversi')
+machina = require('machina')
 
 class ReversiRoom
   constructor:  ->
@@ -376,6 +377,108 @@ class ReversiServer
 
   @genMaskName: (str) ->
     if str.length > 5 then str.slice(0, 5) + "*****" else str
+
+class ReversiServer
+  login: (username, roomname) ->
+    player = @_players[username]
+    room = @_rooms[roomname]
+    unless room
+      room = new ReversiRoom(roomname)
+      @_room[roomname] = room
+      @_setEvRecv room
+
+    try
+      player.login room
+
+      player.notice 'login',
+        username: username
+        roomname: roomname
+    catch error
+      player.notice 'failed login',
+        reason: error
+  logout: (username) ->
+    player = @_players[username]
+
+    try
+      player.logout
+
+      player.notice 'logout',
+        username: username
+    catch error
+      player.notice 'failed logout',
+        reason: error 
+  move: (username, x, y) ->
+    player = @_players[username]
+
+  _setEvRecv: (room) ->
+    room.on 'gameStart', (res) ->
+      turnPlayer = res.turnPlayer
+
+    room.on 'gameEnd', (res) ->
+
+    room.on 'autoPass', (res) ->
+      autoPassCount = res
+
+    room.on 'nextTurn', (res) ->
+      turnPlayer = res.turnPlayer
+      color = res.color
+
+Player = machina.Fsm.extend
+  constructor: (@username, @client, @connector, @options) ->
+    @options = @options || {}
+
+  initialState: 'waiting'
+  states:
+    waiting: 
+      login: (room) ->
+        result = ReversiRoom.login room, @
+        if result.success
+          @_room = result.room 
+          @transition('login')
+        result
+      beginWatch: (room) ->
+        result = ReversiRoom.beginWatch room, @
+        if result.success
+          @_room = result.room 
+          @transition('login')
+        result
+
+    login:
+      room: -> @_room
+      logout: ->
+        result = ReversiRoom.logout @_room, @
+        if result.success
+          @_room = null
+          @transition('waiting')
+        result
+      move: (x, y) ->
+        @_room.move(@, x, y) 
+      pass: ->
+        @_room.pass(@)
+
+    watching: 
+      room: -> @_room
+      endWatch: ->
+        result = ReversiRoom.endWatch @_room, @
+        if result.success
+          @_room = null
+          @transition('waiting')
+        result
+
+  login: (room) ->
+    @handle('login', room)
+  logout: ->
+    @handle('logout')
+  beginWatch: (room) ->
+    @handle('beginWatch', room)
+  endWatch: ->
+    @handle('endWatch')
+  room: ->
+    @handle('room')
+
+
+
+
 
 module.exports = ReversiServer
 

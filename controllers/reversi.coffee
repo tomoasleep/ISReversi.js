@@ -85,7 +85,7 @@ class Reversi
     autoPassCount = @autoPass()
     { update: @updateStack.newest(), autoPass: autoPassCount }
 
-  pass: ->
+  _pass: ->
     unless @canPutCheck()
       if @passCount++ > 0
         @turn = Reversi.gameEnd
@@ -96,12 +96,18 @@ class Reversi
         {success: true, autoPass: autoPassCount}
     else
       {success: false, autoPass: 0}
+
+  pass: (color) ->
+    if color == @turn
+      @pass()
+    else
+      return {success: false, autoPass: 0} 
   
   autoPass: ->
     colorKey = if @turn == Reversi.black then 'black' else 'white'
     if @autoPassFlags[colorKey]
       unless @turn == Reversi.gameEnd
-        result = @pass()
+        result = @_pass()
         return if result.success then result.autoPass + 1 else result.autoPass
     return 0
 
