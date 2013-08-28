@@ -23,18 +23,19 @@ class TcpConnector
       socket: socket
       buffer: ""
       username: null
+      eventStocks: {}
 
     console.log 'server -> tcp server created.'
 
     socket.on 'data', (data) ->
-      console.log "server-> #{data}/ from: #{socket.remoteAddress}:#{socket.remotePort}"
+      console.log "server<- #{data}/ from: #{socket.remoteAddress}:#{socket.remotePort}"
       parseCmd = TcpConnector.parser(client.buffer, data.toString())
       client.buffer = parseCmd.buffer
       if parseCmd.success
         self.doCommand(parseCmd, client)
 
     socket.on 'close', ->
-      console.log "server-> close connection #{socket.remoteAddress}:#{socket.remotePort}"
+      console.log "server -/- close connection #{socket.remoteAddress}:#{socket.remotePort}"
       self.operator.disconnect client.username if client.username
     
     socket.on 'error', ->
@@ -57,9 +58,10 @@ class TcpConnector
         @operator.register username, client, this,
           illigalMoveLose: true
           autoPass: false
-        @operator.login username, roomname 
+        @operator.login username, roomname
 
       when 'MOVE'
+        @operator.timeCheck(client.username)
         if com.args[0] == "PASS"
           @operator.pass client.username
         else
@@ -78,48 +80,89 @@ class TcpConnector
 
   joinGroup: (username, client, groupname) ->
     @groups[groupname] = {} unless @groups[groupname]
-    @groups[groupname][client.username] = client
+    @groups[groupname][username] = client
 
   leaveGroup: (username, client, groupname) ->
-    delete @groups[groupname][client.username]
+    if @groups[groupname][username]
+      g = @groups[groupname]
+      delete g[username]
 
   noticeAll: (type, data) ->
     for idx, val of @clients
       @notice(val, type, data) if val
 
   noticeToGroup: (groupname, type, data) ->
+    console.log @groups[groupname]
     for idx, val of @groups[groupname]
       @notice(val, type, data) if val
 
   notice: (client, type, data) ->
     username = client.username
+    eventStocks = client.eventStocks
 
     switch type
-      when 'game standby'
+      when 'gameStart'
         oppPlayer = data.players[1 - data.players.indexOf(username)]
-        if username == data.nextTurnPlayer
-          client.socket.write "START BLACK #{oppPlayer} 60000\n"
-        else
-          client.socket.write "START WHITE #{oppPlayer} 60000\n"
-      when 'game update'
-        unless username == data.username || data.isLastTurn
-          ptstr = TcpConnector.convertPos(data.update.point.x, data.update.point.y)
-          client.socket.write "MOVE #{ptstr}\n"
-      when 'game pass'
-        unless username == data.username || data.isLastTurn
-          client.socket.write "MOVE PASS\n"
-      when 'game autopass'
-        if username == data.username && !data.isLastTurn
-          client.socket.write "MOVE PASS\n"
-      when 'move submitted'
-        if data.success
-          client.socket.write "ACK 60000\n"
-      when 'game end'
         if data.color == Reversi.black
-          client.socket.write "END #{data.issue} #{data.black} #{data.white} #{data.reason}\n"
+          @socketWrite client, "START BLACK #{oppPlayer} #{data.time}\n"
         else
-          client.socket.write "END #{data.issue} #{data.white} #{data.black} #{data.reason}\n"
-        client.socket.write "BYE\n"
+          @socketWrite client, "START WHITE #{oppPlayer} #{data.time}\n"
+      when 'ack'
+        @socketWrite client, "ACK #{data.time}\n"
+      when 'move'
+        console.log "stock: MOVE #{username} #{data}"
+        eventStocks.move = data
+      when 'pass'
+        console.log "stock: PASS #{username} #{data}"
+        eventStocks.pass = data
+      when 'autoPass'
+        console.log "stock: AUTOPASS #{username} #{data}"
+        eventStocks.autoPass = data
+      when 'sendEvents'
+        emitMove = true
+        emitPass = true
+        emitAutoPass = true
+        if eventStocks.gameEnd
+          if eventStocks.autoPass
+            emitAutoPass = false
+          else
+            emitMove = false
+            emitPass = false
+        
+        if eventStocks.move && emitMove
+          sdata = eventStocks.move
+          unless username == sdata.username
+            ptstr = TcpConnector.convertPos(sdata.update.point.x, sdata.update.point.y)
+            @socketWrite client, "MOVE #{ptstr}\n"
+
+        if eventStocks.pass && emitPass
+          sdata = eventStocks.pass
+          unless username == sdata.username
+            @socketWrite client, "MOVE PASS\n"
+
+        if eventStocks.autoPass && emitAutoPass
+          sdata = eventStocks.autoPass
+          if username == sdata.username
+            @socketWrite client, "MOVE PASS\n"
+
+
+        if eventStocks.gameEnd
+          sdata = eventStocks.gameEnd
+          if sdata.color == Reversi.black
+            @socketWrite client, "END #{sdata.issue} #{sdata.black} #{sdata.white} #{sdata.reason}\n"
+          else
+            @socketWrite client, "END #{sdata.issue} #{sdata.white} #{sdata.black} #{sdata.reason}\n"
+          client.socket.write "BYE\n"
+
+        client.eventStocks = {}
+      when 'gameEnd'
+        eventStocks.gameEnd = data
+      when 'registerFailed'
+        @socketWrite client, "ERROR REGISTER_FAILED"
+
+  socketWrite: (client, msg) ->
+    console.log "server-> #{msg}/ to: #{client.socket.remoteAddress}:#{client.socket.remotePort}"
+    client.socket.write msg
         
   @parser: (buffer, str) ->
     constr = buffer + str

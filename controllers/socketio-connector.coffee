@@ -1,3 +1,4 @@
+Reversi = require('./reversi')
 
 # connector:
 #   need to implement:
@@ -66,43 +67,43 @@ class SocketIOConnector
           username: data.username
           roomname: data.roomname
 
-      when 'game turn'
+      when 'nextTurn'
         client.emit 'game turn',
           color: data.color
 
-      when 'game standby'
-        client.emit 'game standby',
-          name: data.name
+      when 'gameStart'
+        client.emit 'game standby'
 
-        client.socket(data.nextTurnPlayer).emit 'game turn',
-          color: data.nextColor
+        if data.color == Reversi.black
+          console.log client
+          client.emit 'game turn',
+            color: data.color
 
-      when 'game cancel'
-        client.emit 'game cancel',
-          name: data.name
+      when 'gameEnd'
+        if data.reason == 'GAME_CANCELED'
+          client.emit 'game cancel'
+        else
+          client.emit 'game end',
+            data
+            # color: data.color
+            # issue: data.issue
+            # black: data.black
+            # white: data.white
 
-      when 'game update'
+      when 'move'
         client.emit 'game update',
           data.update
           # point: data.point
           # color: data.color
           # revPoints: data.revPoints
           
-      when 'game end'
-        client.emit 'game end',
-          data
-          # color: data.color
-          # issue: data.issue
-          # black: data.black
-          # white: data.white
-
       when 'roomlist'
+        console.log data.roomlist
         client.emit 'roomlist',
           data.roomlist
 
       when 'move submitted'
-        client.emit 'move submitted',
-          success: data.success
+        client.emit 'move submitted'
 
 
 

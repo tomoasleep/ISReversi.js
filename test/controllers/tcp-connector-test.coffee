@@ -1,4 +1,5 @@
 TcpConnector = require('../../controllers/tcp-connector')
+Reversi = require('../../controllers/reversi')
 net = require('net')
 chai = require('chai')
 chai.should()
@@ -49,7 +50,7 @@ describe 'TcpConnector', ->
       roomname.should.eql testuser
       check()
 
-  it 'game standby', (done) -> 
+  it 'gameStart', (done) -> 
     count = 0
     testuser = "testuser"
     
@@ -66,16 +67,18 @@ describe 'TcpConnector', ->
       socket.write("OPEN #{testuser}\n")
 
     operator.registerfunc = (username, client) ->
-      connector.notice client, 'game standby',
-        players: ["testuser", "dummyuser"]
-        nextTurnPlayer: "testuser" 
+      connector.notice client, 'gameStart',
+        players: ["dummyuser", "testuser"]
+        username: "testuser"
+        color: Reversi.black
+        time: 60000
 
     socket.on 'data', (data) ->
       console.log data.toString()
       data.toString().should.eql("START BLACK dummyuser 60000\n")
       check()
 
-  it 'game update', (done) -> 
+  it 'move', (done) -> 
     count = 0
     testuser = "testuser"
     
@@ -92,19 +95,21 @@ describe 'TcpConnector', ->
       socket.write("OPEN #{testuser}\n")
 
     operator.registerfunc = (username, client) ->
-      connector.notice client, 'game update',
+      connector.notice client, 'move',
         username: 'testuser'
         update: 
           point:
             x: 7
             y: 2
+      connector.notice client, 'sendEvents'
 
-      connector.notice client, 'game update',
+      connector.notice client, 'move',
         username: 'dummyuser'
         update: 
           point:
             x: 3
             y: 5
+      connector.notice client, 'sendEvents'
 
     socket.on 'data', (data) ->
       data.toString().should.eql("MOVE C5\n")

@@ -1,22 +1,41 @@
+ReversiBoard = require('./reversi')
+machina = require('machina')()
+machina_extensions = require('../lib/machina_extensions')
 
-machina = require('machina')
+STARTTIME = 60000
+TIME_DEADLINE = -200
 
 ReversiRoom = machina.Fsm.extend
-  constructor: (@name) ->
+  initialize: (@name) ->
     @board = null
     @_players = []
     @_watchers = []
     @colors = [ReversiBoard.black, ReversiBoard.white]
+    @latestTime = undefined
+    @leftTime = {}
+
   initialState: 'empty'
   states:
     empty:
       login: (player) ->
         @_addUser(player)
 
-      beginWatch: (player) ->
+      watchIn: (player) ->
         @_addWatcher(player)
       
-      goWaiting: 'waiting' 
+      watchOut: (player) ->
+        @_removeWatcher(player)
+
+      transitionCheck: ->
+        if @_players.length >= 2
+          @handle('goFull')
+        else if @_players.length + @_watchers.length == 0
+          @handle('goEmpty')
+        else
+          @handle('goWaiting')
+      
+      goWaiting: 'waiting'
+      goFull: 'full'
 
     waiting:
       login: (player) ->
@@ -25,37 +44,182 @@ ReversiRoom = machina.Fsm.extend
       logout: (player) ->
         @_removeUser(player)
 
-      beginWatch: (player) ->
+      watchIn: (player) ->
         @_addWatcher(player)
+
+      watchOut: (player) ->
+        @_removeWatcher(player)
+      
+      transitionCheck: ->
+        if @_players.length >= 2
+          @handle('goFull')
+        else if @_players.length + @_watchers.length == 0
+          @handle('goEmpty')
+        else
+          @handle('goWaiting')
+      
+      goEmpty: 'empty'
+      goFull: 'full'
+
+    full:
+      _onEnter: ->
+        @transition('game')
+
+      startGame: ->
+        @_doStartGame()
+
+      logout: (player) ->
+        @_removeUser(player)
+
+      watchIn: (player) ->
+        @_addWatcher(player)
+
+      watchOut: (player) ->
+        @_removeWatcher(player)
+      
+      transitionCheck: ->
+        if @_players.length >= 2
+          @handle('goFull')
+        else if @_players.length + @_watchers.length == 0
+          @handle('goEmpty')
+        else
+          @handle('goWaiting')
+      
+      goWaiting: 'waiting'
+      goEmpty: 'empty'
 
     game:
       _onEnter: ->
+
         @_suffleColor()
         blackplayer = @findPlayerByColor(ReversiBoard.black)
         whiteplayer = @findPlayerByColor(ReversiBoard.white)
-        autoPassFlag = 
-          black: @options[blackplayer].options.autoPass
-          white: @options[whiteplayer].options.autoPass
+        autoPassFlag =
+          black: blackplayer.options.autoPass
+          white: whiteplayer.options.autoPass
+
+        @leftTime = {}
+        @leftTime[blackplayer.name] = STARTTIME
+        @leftTime[whiteplayer.name] = STARTTIME
 
         @board = new ReversiBoard(autoPassFlag)
-        @emit 'gameStart', 
-          turnPlayer: findPlayerByColor(ReversiBoard.black)
+        @emit 'gameStart',
+          colors:
+            black: blackplayer
+            white: whiteplayer
+          time: STARTTIME
+
+      _onExit: ->
+        @_stone = @board.countStone()
+
+      cancelGame: ->
+        @handle 'endGame', 'GAME_CANCELED',
+          black: 'TIE'
+          white: 'TIE'
+
+      illegalEndGame: (illigalPlayer, reason) ->
+        blackplayer = @findPlayerByColor(ReversiBoard.black)
+        whiteplayer = @findPlayerByColor(ReversiBoard.white)
+        @handle 'endGame', reason,
+          black: if blackplayer.name == illigalPlayer.name then 'LOSE' else 'WIN'
+          white: if whiteplayer.name == illigalPlayer.name then 'LOSE' else 'WIN'
+       
+      illegalCheck: (player, error) ->
+        @handle('illegalEndGame', player, 'ILLIGAL_MOVE') if player.options.illigalMoveLose
+        throw error
+
+      timeCheck: (player, time) ->
+        diff = @timeDiff(time)
+        console.log "timeBefore: #{@latestTime}"
+        console.log "timeAfter: #{time}"
+        console.log "timeDiff: #{diff}"
+
+        lTime = (@leftTime[player.name] || STARTTIME) - diff
+        if lTime < TIME_DEADLINE
+          @handle 'illegalEndGame', player, "TIME_UP"
+          return
+        else if lTime < 0
+          lTime = 0
+
+        @leftTime[player.name] = lTime
+        @emit 'ack', 
+          player: player
+          time: lTime
+
+      endGame: (@_reason, @_wlSpecial) ->
+        @transition('gameEnd')
 
       logout: (player) ->
         @_removeUser(player)
       
+      watchIn: (player) ->
+        @_addWatcher(player)
+
+      watchOut: (player) ->
+        @_removeWatcher(player)
+      
       move: (player, x, y) ->
-        @_parseMoveResult @board.put(x, y, @getColor(player))
+        update = null
+        autoPassCount = 0
+
+        @board.once 'update', (res) ->
+          update = res
+        @board.on 'autoPass', ->
+          autoPassCount++
+
+        try
+          @board.move(x, y, @getColor(player))
+          @board.removeAllListeners()
+          @_parseMoveResult player,
+            update: update
+            autoPassCount: autoPassCount
+        catch error
+          @board.removeAllListeners()
+          @handle 'illegalCheck', player, error
+          
 
       pass: (player) ->
-        @_parseMoveResult @board.pass(@getColor(player))
+        autoPassCount = 0
 
-      _onExit: ->
-        @_stone = @board.countStone()
-        @_result = @handle('gameResult')
+        @board.on 'autoPass', ->
+          autoPassCount++
+
+        try
+          @board.pass(@getColor(player))
+          @board.removeAllListeners()
+          @_parseMoveResult player,
+            autoPassCount: autoPassCount
+        catch error
+          @board.removeAllListeners()
+          @handle 'illegalCheck', player, error
+
+      transitionCheck: ->
+        if @_players.length <= 2
+          @handle('cancelGame')
+        else if @_players.length + @_watchers.length == 0
+          @handle('goEmpty')
+      
+      emitTurn: ->
+        nextColor = @turnColor()
+        nextTurnPlayer = @turnPlayer()
+        @emit 'nextTurn',
+          turnPlayer: nextTurnPlayer
+          color: nextColor
+
+      emitAllUpdates: (player) ->
+        @emit 'allUpdates',
+          toSend: player
+          updates: @board.updateStack.list
+
+      turnColor: ->
+        @board.turn
+
+      turnPlayer: ->
+        @findPlayerByColor(@turnColor())
 
     gameEnd:
       _onEnter: ->
+        @handle('gameResult')
         @emit 'gameEnd', @_result
 
       logout: (player) ->
@@ -64,20 +228,31 @@ ReversiRoom = machina.Fsm.extend
       gameResult: ->
         self = @
 
-        result = {}
-        @players.forEach (player) ->
-          result[player.username] = self.handle('playerResult', player)
-        result
+        playerResult = []
+        @_players.forEach (player) ->
+          playerResult.push
+            player: player
+            result: self.get('playerResult', player)
+            
+        @_result =
+          forPlayer: playerResult
+          forWatcher:
+            watchers: @_watchers
+            result:
+              reason: @_reason
+              black: @_stone.black
+              white: @_stone.white
 
       playerResult: (player) ->
-        userColor = @getColor(username)
+        userColor = @getColor(player)
 
         issue = null
         reason = null
-        if @_illigalPlayer
-          issue = if @_illigalPlayer == username then 'LOSE' else 'WIN'
+        wl = new Array(2)
+
+        if @_wlSpecial
+          wl = [@_wlSpecial.white, @_wlSpecial.black]
         else
-          wl = new Array(2)
           if @_stone.white > @_stone.black
             wl = ['WIN', 'LOSE']
           else if @_stone.white < @_stone.black
@@ -85,87 +260,110 @@ ReversiRoom = machina.Fsm.extend
           else
             wl = ['TIE', 'TIE']
 
-          idx = [ReversiBoard.white, ReversiBoard.black].indexOf(userColor)
-          issue = wl[idx]
-
+        idx = [ReversiBoard.white, ReversiBoard.black].indexOf(userColor)
+        issue = wl[idx]
+      
         color: userColor
-        issue: issue 
+        issue: issue
         reason: @_reason
         black: @_stone.black
         white: @_stone.white
+        
+      transitionCheck: ->
+        if @_players.length + @_watchers.length == 0
+          @handle('goEmpty')
+        else
+          @handle('goWaiting')
 
-  _parseMoveResult: (result) ->
-    nextColor = @board.turn
-    nextTurnPlayer = @turnPlayer()
+      goWaiting: 'waiting'
+      goEmpty: 'empty'
 
-    unless result.success
-      @_endGame('ILLEGAL_MOVE', player) if player.options.illigalMoveLose
-      throw 'illigalMove'
+  _parseMoveResult: (player, result) ->
+    if result.update
+      @emit 'move',
+        update: result.update
+        player: player
+    else
+      @emit 'pass',
+        player: player
 
-    if result.autoPass > 0
-      @emit 'autoPass', result.autoPass
+    if result.autoPassCount > 0
+      @emit 'autoPass', result.autoPassCount
 
-    @_endGame('DOUBLE_PASS') if @board.isGameEnd()
-
-    if @state == 'game'
-      @emit 'nextTurn',
-        nextTurnPlayer: nextTurnPlayer
-        nextColor: nextColor
+    @handle('endGame', 'DOUBLE_PASS') if @board.isGameEnd()
+    @handle('emitTurn')
 
     return @
   
-  _endGame: (reason, illigalPlayer) ->
-    @_illigalPlayer = illigalPlayer
-    @_reason = reason
-    @transition('gameEnd')
-
   _suffleColor: ->
     if Math.random() > 0.5
       tmp = @colors[0]
       @colors[0] = @colors[1]
       @colors[1] = tmp
 
+  _transitionCheck: ->
+    if @_players.length >= 2
+      @handle('goFull')
+    else if @_players.length + @_watchers.length == 0
+      @handle('goEmpty')
+    else
+      @handle('goWaiting')
+
+  _nameValidation: (name) ->
+    for arr in [@_players, @_watchers]
+      for p in arr
+        if p.name == name
+          throw new Error('alreadyExistName')
+
+
   _addUser: (player) ->
-    @_players.push username
-    @handle('goWaiting')
-    @transition('game') if @_players.length >= 2
+    @_nameValidation()
+    @_players.push player
+
+    @emit 'login', player
+    @handle 'transitionCheck'
     @
     
   _removeUser: (player) ->
     idx = @findIdxByName(@_players, player.name)
     if idx >= 0
       @_players.splice(idx, 1)
-      @transition('waiting') if @_players.length < 2
+
+      @emit 'logout', player
+      @handle 'transitionCheck'
       @
     else
-      throw 'playerNotFound'
+      throw new Error('playerNotFound')
 
   _addWatcher: (player) ->
-    @_watchers.push username
+    @_nameValidation()
+    @_watchers.push player
     @handle('goWaiting')
+
+    @emit 'watchIn', player
+    @handle 'emitAllUpdates', player
+    @handle 'transitionCheck'
     @
     
   _removeWatcher: (player) ->
     idx = findIdxByName(@_watchers, player.name)
     if idx >= 0
       @_watchers.splice(idx, 1)
-      @_emptyCheck()
+
+      @emit 'watchOut', player
+      @handle 'transitionCheck'
       @
     else
-      throw 'playerNotFound'
+      throw new Error('playerNotFound')
     
-  _emptyCheck: ->
-    if @_players.length + @_watchers.length == 0
-      @transition('empty')
-      
   getColor: (player) ->
-    idx = @players.indexOf(player.username)
+    idx = @findIdxByName(@_players, player.name)
     return null if idx < 0 || idx > 1
     @colors[idx]
 
-  findIdxByName: (array, username) ->
+  findIdxByName: (array, name) ->
     for i, e of array
-      return i if e.username == username
+      return i if e.name == name
     return -1
 
   findPlayerByColor: (color) ->
@@ -175,42 +373,55 @@ ReversiRoom = machina.Fsm.extend
 
   login: (player) ->
     @handle('login', player)
+    @
 
   logout: (player) ->
     @handle('logout', player)
+    @
 
-  beginWatch: (player) ->
-    @handle('beginWatch', player)
+  startGame: ->
+    @handle('startGame')
 
-  endWatch: (player) ->
-    @handle('endWatch', player)
+  watchIn: (player) ->
+    @handle('watchIn', player)
+    @
 
-ReversiRoom.login = (room, client) ->
-  unless room then room = new ReversiRoom()
-  room.login(client)
+  watchOut: (player) ->
+    @handle('watchOut', player)
+    @
 
-  room
+  move: (player, x, y) ->
+    @handle('move', player, x, y)
+    @
 
-ReversiRoom.logout = (room, client) ->
-  room.logout(client)
-  if room.state == 'empty'
-    room = null
+  pass: (player) ->
+    @handle('pass', player)
+    @
 
-  room
+  isEmpty: ->
+    @state == 'empty'
 
-ReversiRoom.beginWatch = (room, client) ->
-  unless room then room = new ReversiRoom()
-  room.beginWatch(client)
+  get: ->
+    machina_extensions.get.apply @, arguments
 
-  room
-    
-ReversiRoom.endWatch = (room, client) ->
-  room.endWatch(client)
-  if room.state == 'empty'
-    room = null
+  turnColor: ->
+    @get('turnColor')
 
-  room
+  turnPlayer: ->
+    @get('turnPlayer')
 
-    
+  saveTime: ->
+    @latestTime = new Date().getTime()
+
+  timeDiff: (time) ->
+    time - @latestTime
+
+  timeCheck: (player, time) ->
+    @handle('timeCheck', player, time)
+
+  players: -> @_players
+  watchers: -> @_watchers
+
+module.exports = ReversiRoom
 
 

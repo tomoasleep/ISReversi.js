@@ -1,17 +1,24 @@
 
+{EventEmitter} = require 'events'
+
 class UpdateStack
-  constructor: (@point, @color, @next) ->
-    @revPoints = []
+
+  constructor:->
+    @list = []
+
+  push: (pt, color) ->
+    @list.push
+      point: pt
+      color: color
+      revPoints: []
 
   add: (pt) ->
-    @revPoints.push pt
+    @newest().revPoints.push pt
 
-  newest: () ->
-    point: @point
-    color: @color
-    revPoints: @revPoints
+  newest: ->
+    @list[@list.length - 1]
 
-class Reversi
+class Reversi extends EventEmitter
   @black = 1
   @white = -1
   @gameEnd = 0
@@ -56,24 +63,24 @@ class Reversi
     @board[5][4] = Reversi.black
 
     @turn = Reversi.black
-    @updateStack = null
+    @updateStack = new UpdateStack()
 
   colorXY: (x, y) -> @board[x][y]
 
-  canPutCheck: ->
+  canMoveCheck: ->
     for x in [1..8]
       for y in [1..8]
-        return true if @canPut(x, y, @turn)
+        return true if @canMove(x, y, @turn)
     false
   
-  put: (x, y, color) ->
-    return null unless @turn == color && @canPut(x, y, color)
+  move: (x, y, color) ->
+    throw new Error('illegalMove') unless @turn == color && @canMove(x, y, color)
     @passCount = 0
 
-    @updateStack = new UpdateStack(point(x, y), color, @updateStack)
+    @updateStack.push(point(x, y), color)
     @board[x][y] = color
     vector = surrounds(0, 0)
-    for pt, i in surrounds(x, y) 
+    for pt, i in surrounds(x, y)
       seqEnd = @_findSeqEnd.call(@, pt.x, pt.y, vector[i].x, vector[i].y, color)
       if seqEnd
         @_reverseSeq.call(@, pt.x, pt.y, vector[i].x, vector[i].y, seqEnd.x, seqEnd.y)
@@ -82,36 +89,38 @@ class Reversi
 
     count = 0
 
-    autoPassCount = @autoPass()
-    { update: @updateStack.newest(), autoPass: autoPassCount }
+    @emit 'update', @updateStack.newest()
+    @autoPass()
+    @
 
-  _pass: ->
-    unless @canPutCheck()
+  _doPass: ->
+    if @canMoveCheck()
+      throw new Error('illegalPass')
+    else
       if @passCount++ > 0
         @turn = Reversi.gameEnd
-        {success: true, autoPass: 0}
       else
         @turn = - @turn
-        autoPassCount = @autoPass()
-        {success: true, autoPass: autoPassCount}
-    else
-      {success: false, autoPass: 0}
+        @autoPass()
+
 
   pass: (color) ->
     if color == @turn
-      @pass()
+      @_doPass()
+      @
     else
-      return {success: false, autoPass: 0} 
+      throw new Error('illegalPass')
   
   autoPass: ->
-    colorKey = if @turn == Reversi.black then 'black' else 'white'
-    if @autoPassFlags[colorKey]
-      unless @turn == Reversi.gameEnd
-        result = @_pass()
-        return if result.success then result.autoPass + 1 else result.autoPass
-    return 0
+    try
+      colorKey = if @turn == Reversi.black then 'black' else 'white'
+      if @autoPassFlags[colorKey]
+        unless @turn == Reversi.gameEnd
+          @_doPass()
+          @emit 'autoPass'
+    catch _
 
-  canPut: (x, y, color) ->
+  canMove: (x, y, color) ->
     return false unless @colorXY(x, y) == 0
     vector = surrounds(0, 0)
     for pt, i in surrounds(x, y)

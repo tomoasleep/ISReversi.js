@@ -1,5 +1,8 @@
-assert = require('assert')
+assert = require('chai').assert
+expect = require('chai').expect
 ReversiBoard = require('../../controllers/reversi')
+chai = require('chai')
+chai.should()
 
 describe 'Reversi', ->
   describe '.constructor()', ->
@@ -32,55 +35,59 @@ describe 'Reversi', ->
     it 'first turn is black', ->
       assert.equal ReversiBoard.black, rev.turn
 
-  describe '.canPut(x, y, color)', ->
+  describe '.canMove(x, y, color)', ->
     rev = null
     beforeEach ->
       rev = new ReversiBoard()
 
-    it 'canPut (3, 4, black)', ->
-      assert.equal true, rev.canPut(3, 4, ReversiBoard.black)
+    it 'canMove (3, 4, black)', ->
+      assert.equal true, rev.canMove(3, 4, ReversiBoard.black)
     
-    it '!canPut (3, 3, black) (cannot reverse any stone)', ->
-      assert.equal false, rev.canPut(3, 3, ReversiBoard.black)
+    it '!canMove (3, 3, black) (cannot reverse any stone)', ->
+      assert.equal false, rev.canMove(3, 3, ReversiBoard.black)
 
-    it '!canPut (3, 4, white) (cannot reverse any stone)', ->
-      assert.equal false, rev.canPut(3, 3, ReversiBoard.black)
+    it '!canMove (3, 4, white) (cannot reverse any stone)', ->
+      assert.equal false, rev.canMove(3, 3, ReversiBoard.black)
 
-    it '!canPut (4, 4, black) (already a stone exist)', ->
-      assert.equal false, rev.canPut(4, 4, ReversiBoard.black)
+    it '!canMove (4, 4, black) (already a stone exist)', ->
+      assert.equal false, rev.canMove(4, 4, ReversiBoard.black)
 
-  describe '.put(x, y, color)', ->
+  describe '.move(x, y, color)', ->
     rev = null
     beforeEach ->
       rev = new ReversiBoard()
 
-    it 'put (3, 4, black)', ->
-      update = rev.put(3, 4, ReversiBoard.black).update
-      assert.equal 3, update.point.x
-      assert.equal 4, update.point.y
-      assert.equal ReversiBoard.black, update.color
-      assert.equal 1, update.revPoints.length
-      assert.equal 4, update.revPoints[0].x
-      assert.equal 4, update.revPoints[0].y
+    it 'move (3, 4, black)', (done) ->
 
-    it 'put (3, 4, white)', ->
-      result = rev.put(3, 4, ReversiBoard.white)
-      assert.equal null, result
+      rev.once 'update', (update) ->
+        assert.equal 3, update.point.x
+        assert.equal 4, update.point.y
+        assert.equal ReversiBoard.black, update.color
+        assert.equal 1, update.revPoints.length
+        assert.equal 4, update.revPoints[0].x
+        assert.equal 4, update.revPoints[0].y
+        done()
+
+      rev.move(3, 4, ReversiBoard.black).update
+
+    it 'move (3, 4, white)', ->
+      domove = -> rev.move(3, 4, ReversiBoard.white)
+      expect(domove).to.throw(Error)
 
   describe 'countStone', ->
     rev = null
     beforeEach ->
       rev = new ReversiBoard()
 
-    it 'put (3, 4, black)', ->
-      rev.put(3, 4, ReversiBoard.black)
+    it 'move (3, 4, black)', ->
+      rev.move(3, 4, ReversiBoard.black)
       stone = rev.countStone()
       assert.equal 4, stone.black
       assert.equal 1, stone.white
 
-    it 'put (3, 4, black)', ->
+    it 'move (3, 4, black)', ->
       rev.board[5][5] = ReversiBoard.black
-      rev.put(3, 4, ReversiBoard.black)
+      rev.move(3, 4, ReversiBoard.black)
 
       stone = rev.countStone()
       assert.equal 5, stone.black
@@ -95,13 +102,16 @@ describe 'Reversi', ->
       rev.board[4][4] = ReversiBoard.black
       rev.board[5][5] = ReversiBoard.black
 
-      res1 = rev.pass()
-      res2 = rev.pass()
+      rev.pass(ReversiBoard.black)
+      #update1 = rev.updateStack.newest()
+      rev.pass(ReversiBoard.white)
+      #update2 = rev.updateStack.newest()
+
 
       stone = rev.countStone()
 
-      assert.equal 0, res1.autoPass
-      assert.equal 0, res2.autoPass
+      # assert.equal 0, res1.autoPass
+      # assert.equal 0, res2.autoPass
 
       assert.equal 4, stone.black
       assert.equal 0, stone.white
@@ -115,10 +125,10 @@ describe 'Reversi', ->
       rev.board[4][4] = ReversiBoard.black
       rev.board[5][5] = ReversiBoard.black
 
-      res = rev.pass()
+      rev.pass(ReversiBoard.black)
 
-      console.log res
-      assert.equal 1, res.autoPass
+      # console.log res
+      # assert.equal 1, res.autoPass
 
       stone = rev.countStone()
       assert.equal 4, stone.black

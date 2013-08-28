@@ -119,6 +119,10 @@ window.clientStandby = (socketURL) ->
   socket = io.connect socketURL
   revClient = null
 
+  doYourTurn = (color) ->
+    html = "<p>Your Turn: #{if color == ReversiRule.black then 'black' else 'white'}</p>"
+    $(html).hide().prependTo('#chatlog').slideDown()
+
   socket.on 'notice login', (msg) ->
     html = "<p>login(room: #{msg.roomname}): #{msg.username}</p>"
     $(html).hide().prependTo('#chatlog').slideDown()
@@ -127,7 +131,7 @@ window.clientStandby = (socketURL) ->
     html = "<p>logout(room: #{msg.roomname}): #{msg.username}</p>"
     $(html).hide().prependTo('#chatlog').slideDown()
 
-  socket.on 'game standby', ->
+  socket.on 'game standby', (data) ->
     revInterface = new ReversiInterface "#reversi-space", "reversi-board"
     revClient = new ReversiClient(revInterface, socket)
     revClient.mouseEventOn()
@@ -149,8 +153,7 @@ window.clientStandby = (socketURL) ->
     revClient = null
 
   socket.on 'game turn', (res) ->
-    html = "<p>Your Turn: #{if res.color == ReversiRule.black then 'black' else 'white'}</p>"
-    $(html).hide().prependTo('#chatlog').slideDown()
+    doYourTurn(res.color)
 
   socket.on 'roomlist', (res) ->
     for idx, val of res
