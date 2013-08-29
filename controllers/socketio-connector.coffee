@@ -50,9 +50,11 @@ class SocketIOConnector
     client.leave(groupname)
 
   noticeAll: (type, data) ->
+    console.log "noticeAll: #{type}"
     @notice(@_sockets, type, data)
 
   noticeToGroup: (groupname, type, data) ->
+    console.log "noticeToGroup: #{groupname} #{type}"
     @notice(@_sockets.to(groupname), type, data)
 
   notice: (client, type, data) ->

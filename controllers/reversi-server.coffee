@@ -139,21 +139,25 @@ class ReversiServer
     self = @
 
     room.on 'login', (player) ->
+      console.log "event: login #{room.name} <- #{player.name}"
       self.requestNoticeAll 'login',
         roomname: room.name
         username: player.name
 
     room.on 'logout', (player) ->
+      console.log "event: logout #{room.name} <- #{player.name}"
       self.requestNoticeAll 'logout',
         roomname: room.name
         username: player.name
 
     room.on 'watchIn', (player) ->
+      console.log "event: watchIn #{room.name} <- #{player.name}"
       self.requestNoticeAll 'watchIn',
         roomname: room.name
         username: player.name
 
     room.on 'watchOut', (player) ->
+      console.log "event: watchOut #{room.name} <- #{player.name}"
       self.requestNoticeAll 'watchOut',
         roomname: room.name
         username: player.name
@@ -162,6 +166,7 @@ class ReversiServer
       players = for _, p of res.colors
         p.name
 
+      console.log "event: gameStart #{room.name} #{players}"
       for colorname, player of res.colors
         player.notice 'gameStart',
           color: if colorname == 'black' then ReversiBoard.black else ReversiBoard.white
@@ -170,6 +175,7 @@ class ReversiServer
           time: res.time
 
     room.on 'gameEnd', (res) ->
+      console.log "event: gameEnd #{room.name}"
       for i in res.forPlayer
         i.player.notice 'gameEnd', i.result
 
@@ -178,27 +184,33 @@ class ReversiServer
           res.forWatcher.result
 
     room.on 'move', (res) ->
+      console.log "event: move #{res.player.name}"
       self.requestNoticeToGroup room.name, 'move',
         update: res.update
         username: res.player.name
 
     room.on 'pass', (res) ->
+      console.log "event: pass #{res.player.name}"
       self.requestNoticeToGroup room.name, 'pass',
         username: res.player.name
 
     room.on 'autoPass', (res) ->
+      console.log "event: autoPass #{room.name} #{res}"
       self.requestNoticeToGroup room.name, 'autoPass',
         count: res
 
     room.on 'nextTurn', (res) ->
+      console.log "event: nextTurn #{res.turnPlayer.name} #{res.color}"
       res.turnPlayer.notice 'nextTurn',
         color: res.color
 
     room.on 'ack', (res) ->
+      console.log "event: ack #{res.player.name} #{res.time}"
       res.player.notice 'ack', 
         time: res.time
 
     room.on 'sendEvents', ->
+      console.log "event: sendEvents #{room.name}"
       self.requestNoticeToGroup room.name, 'sendEvents'
 
   _offRoomEvent: (room) ->
@@ -275,11 +287,6 @@ Player = machina.Fsm.extend
 
   leaveGroup: (groupname) ->
     @connector.leaveGroup(@name, @client, groupname)
-
-
-
-
-
 
 module.exports = ReversiServer
 

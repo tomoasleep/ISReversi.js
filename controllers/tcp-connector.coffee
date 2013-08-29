@@ -40,7 +40,6 @@ class TcpConnector
     
     socket.on 'error', ->
       console.log "error occured"
-      # console.log arguments
       self.operator.disconnect client.username if client.username
       self.end
 
@@ -92,7 +91,6 @@ class TcpConnector
       @notice(val, type, data) if val
 
   noticeToGroup: (groupname, type, data) ->
-    console.log @groups[groupname]
     for idx, val of @groups[groupname]
       @notice(val, type, data) if val
 

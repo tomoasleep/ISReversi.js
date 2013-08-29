@@ -51,6 +51,7 @@ class Reversi extends EventEmitter
   constructor: (@autoPassFlags) ->
     @autoPassFlags = @autoPassFlags || {black: true, white: true}
     @passCount = 0
+    @latestAutoPass = 0
     @board = (new Array(10) for _v in new Array(10))
     for val, i in @board
       for _v, j in val
@@ -76,6 +77,7 @@ class Reversi extends EventEmitter
   move: (x, y, color) ->
     throw new Error('illegalMove') unless @turn == color && @canMove(x, y, color)
     @passCount = 0
+    @latestAutoPass = 0
 
     @updateStack.push(point(x, y), color)
     @board[x][y] = color
@@ -105,6 +107,7 @@ class Reversi extends EventEmitter
 
 
   pass: (color) ->
+    @latestAutoPass = 0
     if color == @turn
       @_doPass()
       @
@@ -118,6 +121,7 @@ class Reversi extends EventEmitter
         unless @turn == Reversi.gameEnd
           @_doPass()
           @emit 'autoPass'
+          @latestAutoPass++
     catch _
 
   canMove: (x, y, color) ->

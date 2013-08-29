@@ -107,9 +107,7 @@ describe 'Reversi', ->
       rev.pass(ReversiBoard.white)
       #update2 = rev.updateStack.newest()
 
-
       stone = rev.countStone()
-
       # assert.equal 0, res1.autoPass
       # assert.equal 0, res2.autoPass
 
@@ -135,6 +133,19 @@ describe 'Reversi', ->
       assert.equal 0, stone.white
 
       assert.equal true, rev.isGameEnd()
+	it 'auto pass', (done) ->
+      count = 2
+      rev = new ReversiBoard
+        black: true
+        white: true
 
+      check = ->
+        done() if count-- <= 1
+
+      rev.on 'autoPass', ->
+        check()
+
+      rev.board[5][5] = ReversiBoard.black
+      rev.move(3, 4, ReversiBoard.black)
 
 
