@@ -34,6 +34,14 @@ class SocketIOConnector
       # console.log "received/logout (id: #{socket.id})"
       self.operator.logout username
 
+    socket.on 'room watchIn', (roomname) ->
+      # console.log "received/login: #{name}, id: #{socket.id}"
+      self.operator.watchIn username, roomname
+
+    socket.on 'room watchOut', () ->
+      # console.log "received/logout (id: #{socket.id})"
+      self.operator.watchOut username
+
     socket.on 'disconnect', ->
       self.operator.disconnect username
 
@@ -69,6 +77,16 @@ class SocketIOConnector
           username: data.username
           roomname: data.roomname
 
+      when 'watchIn'
+        client.emit 'notice watchIn',
+          username: data.username
+          roomname: data.roomname
+
+      when 'watchOut'
+        client.emit 'notice watchOut',
+          username: data.username
+          roomname: data.roomname
+
       when 'nextTurn'
         client.emit 'game turn',
           color: data.color
@@ -80,6 +98,12 @@ class SocketIOConnector
           console.log client
           client.emit 'game turn',
             color: data.color
+
+      when 'gameWatchStart'
+        client.emit 'game watchStart', data
+
+      when 'watchingGameEnd'
+        client.emit 'game watchEnd', data
 
       when 'gameEnd'
         if data.reason == 'GAME_CANCELED'
@@ -99,6 +123,10 @@ class SocketIOConnector
           # color: data.color
           # revPoints: data.revPoints
           
+      when 'allUpdates'
+        client.emit 'game all updates',
+          data
+
       when 'roomlist'
         console.log data.roomlist
         client.emit 'roomlist',

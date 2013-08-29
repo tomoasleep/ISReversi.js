@@ -107,6 +107,7 @@ ReversiRoom = machina.Fsm.extend
           colors:
             black: blackplayer
             white: whiteplayer
+          watchers: @_watchers
           time: STARTTIME
 
       _onExit: ->
@@ -157,6 +158,13 @@ ReversiRoom = machina.Fsm.extend
 
       watchOut: (player) ->
         @_removeWatcher(player)
+
+      transitionCheck: ->
+        if @_players.length < 2
+          @handle('cancelGame')
+        else if @_players.length + @_watchers.length == 0
+          @handle('goEmpty')
+      
       
       move: (player, x, y) ->
         update = null
@@ -193,12 +201,6 @@ ReversiRoom = machina.Fsm.extend
           @board.removeAllListeners()
           @handle 'illegalCheck', player, error
 
-      transitionCheck: ->
-        if @_players.length <= 2
-          @handle('cancelGame')
-        else if @_players.length + @_watchers.length == 0
-          @handle('goEmpty')
-      
       emitTurn: ->
         nextColor = @turnColor()
         nextTurnPlayer = @turnPlayer()
@@ -207,9 +209,13 @@ ReversiRoom = machina.Fsm.extend
           color: nextColor
 
       emitAllUpdates: (player) ->
+        blackplayer = @findPlayerByColor(ReversiBoard.black)
+        whiteplayer = @findPlayerByColor(ReversiBoard.white)
         @emit 'allUpdates',
           toSend: player
           updates: @board.updateStack.list
+          black: blackplayer
+          white: whiteplayer
 
       turnColor: ->
         @board.turn
@@ -346,7 +352,7 @@ ReversiRoom = machina.Fsm.extend
     @
     
   _removeWatcher: (player) ->
-    idx = findIdxByName(@_watchers, player.name)
+    idx = @findIdxByName(@_watchers, player.name)
     if idx >= 0
       @_watchers.splice(idx, 1)
 

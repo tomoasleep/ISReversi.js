@@ -123,8 +123,7 @@ describe 'ReversiServer', ->
             data.roomname.should.eql roomname
             check()
           when 'loginFailed', 'logoutFailed'
-            console.log 'fail'
-            1.should.eql 2
+            chai.assert.fail()
 
       revServer.register(username, testClient, testConnector)
       revServer.login(username, roomname)
@@ -203,6 +202,124 @@ describe 'ReversiServer', ->
       revServer.login(usernames[0], roomname)
       revServer.login(usernames[1], roomname)
       revServer.logout(usernames[0], roomname)
+
+  describe 'watch', ->
+    it 'watchIn and watchOut', (done) ->
+      username = 'testuser'
+      roomname = 'testroom'
+      testClient =
+        id: "test"
+      count = 2
+
+      check = ->
+        console.log count
+        if count-- <= 1
+          done()
+
+      testConnector.noticeAllfunc = (type, data) ->
+        switch type
+          when 'watchIn'
+            data.username.should.eql username
+            data.roomname.should.eql roomname
+            check()
+          when 'watchOut'
+            data.username.should.eql username
+            data.roomname.should.eql roomname
+            check()
+
+      testConnector.noticefunc = (client, type, data) ->
+        switch type
+          when 'watchInFailed', 'watchOutFailed'
+            console.log 'fail'
+            1.should.eql 2
+
+      revServer.register(username, testClient, testConnector)
+      revServer.watchIn(username, roomname)
+      revServer.watchOut(username)
+
+    it 'watchIn and gamestart', (done) ->
+      usernames = ['testuser1', 'testuser2', 'watchUser']
+      roomname = 'testroom'
+      testClients = [{id: "test1"}, {id: "test2"}, {id: "wtest"}]
+      nextTurnPlayer = null
+      count = 3
+
+      check = ->
+        done() if count-- <= 1
+
+      testConnector.noticefunc = (client, type, data) ->
+        console.log arguments
+        switch type
+          when 'gameStart'
+            if data.color == Reversi.black
+              nextTurnPlayer = data.username
+            check()
+          when 'gameWatchStart'
+            check()
+
+      revServer.register(usernames[0], testClients[0], testConnector)
+      revServer.register(usernames[1], testClients[1], testConnector)
+      revServer.register(usernames[2], testClients[2], testConnector)
+      revServer.watchIn(usernames[2], roomname)
+
+      revServer.login(usernames[0], roomname)
+      revServer.login(usernames[1], roomname)
+
+
+    it 'watch move', (done) ->
+      usernames = ['testuser1', 'testuser2', 'watchUser']
+      roomname = 'testroom'
+      testClients = [{id: "test1"}, {id: "test2"}, {id: "wtest"}]
+      nextTurnPlayer = null
+      count = 4
+
+      check = ->
+        done() if count-- <= 1
+
+      testConnector.noticeToGroupfunc = (groupname, type, data) ->
+        groupname.should.eql(roomname)
+        console.log arguments
+        switch type
+          when 'move'
+            data.update.point.x.should.eql(3)
+            data.update.point.y.should.eql(4)
+            data.update.color.should.eql(Reversi.black)
+            data.update.revPoints[0].x.should.eql(4)
+            data.update.revPoints[0].y.should.eql(4)
+            check()
+
+      testConnector.noticefunc = (client, type, data) ->
+        console.log arguments
+        switch type
+          when 'nextTurn'
+            data.color.should.eql Reversi.white
+            check()
+          when 'gameStart'
+            if data.color == Reversi.black
+              nextTurnPlayer = data.username
+          when 'allUpdates'
+            console.log data.updates
+            data.updates[0].point.x.should.eql(3)
+            data.updates[0].point.y.should.eql(4)
+            data.updates[0].color.should.eql(Reversi.black)
+            data.updates[0].revPoints[0].x.should.eql(4)
+            data.updates[0].revPoints[0].y.should.eql(4)
+            check()
+          when 'gameEnd'
+            chai.assert.fail()
+
+
+      revServer.register(usernames[0], testClients[0], testConnector)
+      revServer.register(usernames[1], testClients[1], testConnector)
+      revServer.login(usernames[0], roomname)
+      revServer.login(usernames[1], roomname)
+      revServer.move(nextTurnPlayer, 3, 4)
+
+      revServer.register(usernames[2], testClients[2], testConnector)
+      revServer.watchIn(usernames[2], roomname)
+      revServer.watchOut(usernames[2])
+
+      check()
 
   describe 'move', ->
     it 'move', (done) ->

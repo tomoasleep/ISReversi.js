@@ -26,8 +26,9 @@ class ReversiServer
     catch error
       console.log 'loginFailed'
       console.log error
-      player.notice 'loginFailed',
-        reason: error
+      if player
+        player.notice 'loginFailed',
+          reason: error
     finally
       room.saveTime() if room
 
@@ -46,14 +47,56 @@ class ReversiServer
     catch error
       console.log 'logoutFailed'
       console.log error
-      player.notice 'logoutFailed',
-        reason: error
-        #throw error
+      if player
+        player.notice 'logoutFailed',
+          reason: error
+    finally
+      room.saveTime() if room
+
+  watchIn: (username, roomname) ->
+    user = @_users[username]
+    room = @_rooms[roomname]
+    unless room
+      room = new ReversiRoom(roomname)
+      @_rooms[roomname] = room
+      @_onRoomEvent room
+
+    try
+      user.watchIn room
+      user.joinGroup roomname
+
+    catch error
+      console.log 'watchInFailed'
+      console.log error
+      if user
+        user.notice 'watchInFailed',
+          reason: error
+    finally
+      room.saveTime() if room
+
+  watchOut: (username) ->
+    user = @_users[username]
+    room = user.room()
+
+    try
+      user.watchOut()
+      user.leaveGroup room.name
+
+      if room.isEmpty()
+        @_offRoomEvent room
+        delete @_rooms[room.name]
+    catch error
+      console.log 'watchOutFailed'
+      console.log error
+      if user
+        user.notice 'watchOutFailed',
+          reason: error
     finally
       room.saveTime() if room
 
   disconnect: (username) ->
     @logout(username)
+    @watchOut(username)
     @_remove(username)
 
   move: (username, x, y) ->
@@ -174,13 +217,18 @@ class ReversiServer
           players: players
           time: res.time
 
+      for w in res.watchers
+        w.notice 'gameWatchStart',
+          blackplayer: res.colors.black.name
+          whiteplayer: res.colors.white.name
+
     room.on 'gameEnd', (res) ->
       console.log "event: gameEnd #{room.name}"
       for i in res.forPlayer
         i.player.notice 'gameEnd', i.result
 
       for i in res.forWatcher.watchers
-        i.notice 'WatchingGameEnd',
+        i.notice 'watchingGameEnd',
           res.forWatcher.result
 
     room.on 'move', (res) ->
@@ -188,6 +236,13 @@ class ReversiServer
       self.requestNoticeToGroup room.name, 'move',
         update: res.update
         username: res.player.name
+
+    room.on 'allUpdates', (res) ->
+      console.log "event: allUpdates #{res.toSend.name}"
+      res.toSend.notice 'allUpdates',
+        updates: res.updates
+        blackplayer: res.black.name
+        whiteplayer: res.white.name
 
     room.on 'pass', (res) ->
       console.log "event: pass #{res.player.name}"
@@ -232,12 +287,16 @@ Player = machina.Fsm.extend
       watchIn: (room) ->
         @_room = @
         @_room = room.watchIn @
-        @transition('login')
+        @transition('watching')
 
     login:
       room: -> @_room
       login: ->
         throw new Error('Double login')
+      watchIn: ->
+        throw new Error('Double login')
+      watchOut: ->
+        throw new Error('not watchIn')
       logout: ->
         room = @_room
         room.logout @
@@ -252,10 +311,14 @@ Player = machina.Fsm.extend
 
     watching:
       room: -> @_room
+      login: ->
+        throw new Error('Double login')
+      logout: ->
+        throw new Error('not login')
       watchOut: ->
         room = @_room
-        @_room = null
         room.watchOut @
+        @_room = null
         @transition('waiting')
 
   login: (room) ->

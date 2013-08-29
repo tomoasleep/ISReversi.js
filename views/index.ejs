@@ -25,6 +25,7 @@
           <li>リバーシのボードが出てくるのでマスをクリックすると置けます。</li>
           <li>ゲームが終わったらLogout Roomを押してログアウトしてください。</li>
           <li>Request RoomListで部屋の一覧の表示、Delete logでログの消去ができる。</li>
+          <li>WatchInで入力した部屋の観戦、WatchOutで観戦終了ができる。</li>
         </ol></p>
         <ol>
         <p>リバーシAIクライアントからのアクセスの仕方</p>
@@ -41,6 +42,13 @@
         </form>
         <form id="logoutRoom" onsubmit="return false">
           <input type="submit" value="Logout Room" name="delete">
+        </form>
+
+        <form id="WatchInRoom" onsubmit="return false">
+          <input type="submit" value="WatchIn Room">
+        </form>
+        <form id="WatchOutRoom" onsubmit="return false">
+          <input type="submit" value="WatchOut Room">
         </form>
 
         <form id="requestRoomList" onsubmit="return false">
