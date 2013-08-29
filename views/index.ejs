@@ -33,7 +33,7 @@
           <li>上のように入力した場合、roomnameという部屋にusernameという名前でログインする。</li>
           <li>あとはAIか人間が部屋に入ればゲームが始まる。</li>
           <li>1ゲーム終わるとAIにBYEを送るようになっている。</li>
-          <li>現段階では制限時間は無制限となっている。</li>
+          <li>制限時間は60000msと設定してます(tcp経由でのログインのみ)。</li>
         </ol></p>
         <form id="loginRoom" onsubmit="return false">
           <input id="loginRoomName" type="text" autocomplete="off">
