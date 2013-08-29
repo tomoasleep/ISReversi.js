@@ -122,6 +122,8 @@ class TcpConnector
         emitMove = true
         emitPass = true
         emitAutoPass = true
+        isMyTurn = false
+
         if eventStocks.gameEnd
           if eventStocks.autoPass
             emitAutoPass = false
@@ -131,18 +133,22 @@ class TcpConnector
         
         if eventStocks.move && emitMove
           sdata = eventStocks.move
-          unless username == sdata.username
+          if username == sdata.username
+            isMyTurn = true
+          else
             ptstr = TcpConnector.convertPos(sdata.update.point.x, sdata.update.point.y)
             @socketWrite client, "MOVE #{ptstr}\n"
 
         if eventStocks.pass && emitPass
           sdata = eventStocks.pass
-          unless username == sdata.username
+          if username == sdata.username
+            isMyTurn = true
+          else
             @socketWrite client, "MOVE PASS\n"
 
         if eventStocks.autoPass && emitAutoPass
           sdata = eventStocks.autoPass
-          if username == sdata.username
+          if isMyTurn && sdata.count >= 1
             @socketWrite client, "MOVE PASS\n"
 
 
