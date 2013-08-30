@@ -168,6 +168,7 @@ class TcpConnector
         eventStocks.gameEnd = data
       when 'registerFailed'
         @socketWrite client, "ERROR REGISTER_FAILED #{data.reason}"
+        client.username = null
 
   socketWrite: (client, msg) ->
     console.log "server-> #{msg}/ to: #{client.socket.remoteAddress}:#{client.socket.remotePort}"
