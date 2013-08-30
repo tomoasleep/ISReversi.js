@@ -28,11 +28,16 @@ class TcpConnector
     console.log 'server -> tcp server created.'
 
     socket.on 'data', (data) ->
-      console.log "server<- #{data}/ from: #{socket.remoteAddress}:#{socket.remotePort}"
-      parseCmd = TcpConnector.parser(client.buffer, data.toString())
-      client.buffer = parseCmd.buffer
-      if parseCmd.success
-        self.doCommand(parseCmd, client)
+      try
+        console.log "server<- #{data}/ from: #{socket.remoteAddress}:#{socket.remotePort}"
+        parseCmd = TcpConnector.parser(client.buffer, data.toString())
+        client.buffer = parseCmd.buffer
+        if parseCmd.success
+          self.doCommand(parseCmd, client)
+      catch error
+        console.log "tcpConnector: error occured: #{error}"
+        socket.end()
+
 
     socket.on 'close', ->
       console.log "server -/- close connection #{socket.remoteAddress}:#{socket.remotePort}"
@@ -41,7 +46,7 @@ class TcpConnector
     socket.on 'error', ->
       console.log "error occured"
       self.operator.disconnect client.username if client.username
-      self.end
+      socket.end()
 
   doCommand: (com, client) ->
     switch com.command
@@ -162,7 +167,7 @@ class TcpConnector
       when 'gameEnd'
         eventStocks.gameEnd = data
       when 'registerFailed'
-        @socketWrite client, "ERROR REGISTER_FAILED"
+        @socketWrite client, "ERROR REGISTER_FAILED #{data.reason}"
 
   socketWrite: (client, msg) ->
     console.log "server-> #{msg}/ to: #{client.socket.remoteAddress}:#{client.socket.remotePort}"

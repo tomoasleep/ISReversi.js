@@ -144,8 +144,9 @@ class ReversiServer
 
   register: (username, client, connector, options) ->
     if @_users[username]
-      connector.notice client, 'registerFailed'
-      # throw new Error('alreadyExistName')
+      connector.notice client, 'registerFailed',
+        reason: "ALREADY EXIST NAME"
+      throw new Error('alreadyExistName')
     @_users[username] = new Player(username, client, connector, options)
 
   _remove: (username) ->
