@@ -95,9 +95,13 @@ class ReversiServer
       room.saveTime() if room
 
   disconnect: (username) ->
-    @logout(username)
-    @watchOut(username)
-    @_remove(username)
+    try 
+      @logout(username)
+      @watchOut(username)
+    catch error
+      console.log error
+    finally
+      @_remove(username)
 
   move: (username, x, y) ->
     player = @_users[username]
