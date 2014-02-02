@@ -68,12 +68,23 @@ class ReversiInterface
     @canvas.save
 
   beginKeyWait: () -> canKeyWait = true
-  stopKeyWait: () -> 
+  stopKeyWait: () ->
     setTimeout(@beginKeyWait, 5000)
     canKeyWait = false
 
-class ReversiClient
+class ChatlogController
+  constructor: (@el) ->
+    @$el = $(@el)
 
+  add: (message) ->
+    console.log(message)
+    $(message).hide().prependTo(@$el).slideDown()
+
+  clear: ->
+    console.log('clear')
+    @$el.empty()
+
+class ReversiClient
   constructor: (@_interface, @socket, @name) ->
     self = @
     @_interface.client = @ if @_interface
@@ -89,7 +100,7 @@ class ReversiClient
   updateLog: (update) ->
     html = "<p>#{if update.color == ReversiRule.black then "black" else "white" }: "
     html += "(#{update.point.x}, #{update.point.y})</p>"
-    $(html).hide().prependTo('#chatlog').slideDown()
+    chatlog.add(html)
 
   _updateCallback: (res) ->
     if res && @_interface
@@ -113,6 +124,8 @@ class ReversiClient
     interfaceId = "##{@_interface.id}"
     $(interfaceId).off 'click'
 
+window.chatlog = new ChatlogController('#chatlog')
+
 window.clientStandby = (socketURL) ->
   socketURL = socketURL || "http://localhost:3000"
 
@@ -121,59 +134,59 @@ window.clientStandby = (socketURL) ->
 
   doYourTurn = (color) ->
     html = "<p>Your Turn: #{if color == ReversiRule.black then 'black' else 'white'}</p>"
-    $(html).hide().prependTo('#chatlog').slideDown()
+    chatlog.add(html)
 
   socket.on 'notice login', (msg) ->
     html = "<p>login(room: #{msg.roomname}): #{msg.username}</p>"
-    $(html).hide().prependTo('#chatlog').slideDown()
+    chatlog.add(html)
 
   socket.on 'notice logout', (msg) ->
     html = "<p>logout(room: #{msg.roomname}): #{msg.username}</p>"
-    $(html).hide().prependTo('#chatlog').slideDown()
+    chatlog.add(html)
 
   socket.on 'notice watchIn', (msg) ->
     html = "<p>watchIn (room: #{msg.roomname}): #{msg.username}</p>"
-    $(html).hide().prependTo('#chatlog').slideDown()
+    chatlog.add(html)
 
   socket.on 'notice watchOut', (msg) ->
     html = "<p>watchOut (room: #{msg.roomname}): #{msg.username}</p>"
-    $(html).hide().prependTo('#chatlog').slideDown()
+    chatlog.add(html)
 
   socket.on 'game watchStart', (data) ->
     revInterface = new ReversiInterface "#reversi-space", "reversi-board"
     revClient = new ReversiClient(revInterface, socket)
     html = "<p>-- game start --</p>"
-    $(html).hide().prependTo('#chatlog').slideDown()
+    chatlog.add(html)
     html = "<p>black: #{data.blackplayer} / white: #{data.whiteplayer}</p>"
-    $(html).hide().prependTo('#chatlog').slideDown()
+    chatlog.add(html)
 
   socket.on 'game standby', (data) ->
     revInterface = new ReversiInterface "#reversi-space", "reversi-board"
     revClient = new ReversiClient(revInterface, socket)
     revClient.mouseEventOn()
     html = "<p>-- game start --</p>"
-    $(html).hide().prependTo('#chatlog').slideDown()
+    chatlog.add(html)
 
   socket.on 'game cancel', ->
     html = "<p>-- game canceled --</p>"
-    $(html).hide().prependTo('#chatlog').slideDown()
+    chatlog.add(html)
     revClient.mouseEventOff()
     revClient = null
 
   socket.on 'game end', (res) ->
     html = "<p>-- game end --</p>"
-    $(html).hide().prependTo('#chatlog').slideDown()
+    chatlog.add(html)
     html = "<p>#{res.issue}, #{res.reason},\n
       black: #{res.black}, white: #{res.white}</p>"
-    $(html).hide().prependTo('#chatlog').slideDown()
+    chatlog.add(html)
     revclient.mouseeventoff()
     revclient = null
 
   socket.on 'game watchEnd', (res) ->
     html = "<p>-- game end --</p>"
-    $(html).hide().prependTo('#chatlog').slideDown()
+    chatlog.add(html)
     html = "<p>#{res.reason},\n black: #{res.black}, white: #{res.white}</p>"
-    $(html).hide().prependTo('#chatlog').slideDown()
+    chatlog.add(html)
     revclient.mouseeventoff()
     revclient = null
 
@@ -182,12 +195,12 @@ window.clientStandby = (socketURL) ->
 
   socket.on 'roomlist', (res) ->
     for idx, val of res
-      watcherStr = 
-        if val.watchers.length > 0 
-          "(#{val.watchers.length} watcher)" 
+      watcherStr =
+        if val.watchers.length > 0
+          "(#{val.watchers.length} watcher)"
         else ""
       html = "<p>#{val.name}: #{val.players} #{watcherStr} </p>"
-      $(html).hide().prependTo('#chatlog').slideDown()
+      chatlog.add(html)
 
   socket.on 'game update', (res) ->
     console.log res
@@ -198,9 +211,9 @@ window.clientStandby = (socketURL) ->
   socket.on 'game all updates', (res) ->
     console.log res
     html = "<p>-- game start --</p>"
-    $(html).hide().prependTo('#chatlog').slideDown()
+    chatlog.add(html)
     html = "<p>black: #{res.blackplayer} / white: #{res.whiteplayer}</p>"
-    $(html).hide().prependTo('#chatlog').slideDown()
+    chatlog.add(html)
     revInterface = new ReversiInterface "#reversi-space", "reversi-board"
     revClient = new ReversiClient(revInterface, socket)
     for upd in res.updates
@@ -228,10 +241,7 @@ window.clientStandby = (socketURL) ->
     socket.emit 'request roomlist'
 
   $('#deletelog').on 'submit', ->
-    $('#chatlog').empty()
+    chatlog.clear()
 
   socket.emit 'request roomlist'
 
-# exports.ReversiClient = ReversiClient
-# exports.ReversiInterface = ReversiInterface
-  
