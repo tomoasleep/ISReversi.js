@@ -1,6 +1,6 @@
 ReversiBoard = require('./reversi')
 ReversiRoom = require('./reversi-room')
-machina = require('machina')()
+machina = require('machina')
 machina_extensions = require('../lib/machina_extensions')
 
 class ReversiServer

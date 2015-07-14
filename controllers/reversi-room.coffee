@@ -1,5 +1,5 @@
 ReversiBoard = require('./reversi')
-machina = require('machina')()
+machina = require('machina')
 machina_extensions = require('../lib/machina_extensions')
 
 STARTTIME = 60000
