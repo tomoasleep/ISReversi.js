@@ -34,11 +34,11 @@ describe 'TcpConnector', ->
   it 'OPEN', (done) ->
     count = 0
     testuser = "testuser"
-    
+
     check = ->
       if count++ > 0
         client.end()
-        done() 
+        done()
 
     client = net.createConnection port: port, ->
       console.log arguments
@@ -50,17 +50,17 @@ describe 'TcpConnector', ->
       roomname.should.eql testuser
       check()
 
-  it 'gameStart', (done) -> 
+  it 'gameStart', (done) ->
     count = 0
     testuser = "testuser"
-    
+
     check = ->
       if count++ > 0
         socket.end()
-        done() 
+        done()
 
     socket = net.createConnection port: port, ->
-      client = 
+      client =
         socket: socket
         username: testuser
       check()
@@ -78,17 +78,17 @@ describe 'TcpConnector', ->
       data.toString().should.eql("START BLACK dummyuser 60000\n")
       check()
 
-  it 'move', (done) -> 
+  it 'move', (done) ->
     count = 0
     testuser = "testuser"
-    
+
     check = ->
       if count++ > 0
         socket.end()
-        done() 
+        done()
 
     socket = net.createConnection port: port, ->
-      client = 
+      client =
         socket: socket
         username: testuser
       check()
@@ -97,7 +97,7 @@ describe 'TcpConnector', ->
     operator.registerfunc = (username, client) ->
       connector.notice client, 'move',
         username: 'testuser'
-        update: 
+        update:
           point:
             x: 7
             y: 2
@@ -105,7 +105,7 @@ describe 'TcpConnector', ->
 
       connector.notice client, 'move',
         username: 'dummyuser'
-        update: 
+        update:
           point:
             x: 3
             y: 5
@@ -114,9 +114,3 @@ describe 'TcpConnector', ->
     socket.on 'data', (data) ->
       data.toString().should.eql("MOVE C5\n")
       check()
-    
-
-
-
-
-

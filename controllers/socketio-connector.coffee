@@ -126,7 +126,7 @@ class SocketIOConnector
           # point: data.point
           # color: data.color
           # revPoints: data.revPoints
-          
+
       when 'allUpdates'
         client.emit 'game all updates',
           data
@@ -142,4 +142,3 @@ class SocketIOConnector
 
 
 module.exports = SocketIOConnector
-

@@ -73,7 +73,7 @@ class Reversi extends EventEmitter
       for y in [1..8]
         return true if @canMove(x, y, @turn)
     false
-  
+
   move: (x, y, color) ->
     throw new Error('illegalMove') unless @turn == color && @canMove(x, y, color)
     @passCount = 0
@@ -113,7 +113,7 @@ class Reversi extends EventEmitter
       @
     else
       throw new Error('illegalPass')
-  
+
   autoPass: ->
     try
       colorKey = if @turn == Reversi.black then 'black' else 'white'
@@ -148,4 +148,3 @@ class Reversi extends EventEmitter
 
 
 module.exports = Reversi
-

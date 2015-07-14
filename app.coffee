@@ -31,7 +31,7 @@ app.use express.static(path.join(__dirname, "public"))
 app.use express.errorHandler()  if "development" is app.get("env")
 
 app.get "/", (req, res) ->
-  res.render "index", 
+  res.render "index",
     url: app.get("url")
     port: app.get("port")
     tcp_port: app.get("tcp_port")

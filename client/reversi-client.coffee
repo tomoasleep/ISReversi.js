@@ -244,4 +244,3 @@ window.clientStandby = (socketURL) ->
     chatlog.clear()
 
   socket.emit 'request roomlist'
-

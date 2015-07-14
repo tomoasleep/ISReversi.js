@@ -22,7 +22,7 @@ ReversiRoom = machina.Fsm.extend
 
       watchIn: (player) ->
         @_addWatcher(player)
-      
+
       watchOut: (player) ->
         @_removeWatcher(player)
 
@@ -33,7 +33,7 @@ ReversiRoom = machina.Fsm.extend
           @handle('goEmpty')
         else
           @handle('goWaiting')
-      
+
       goWaiting: 'waiting'
       goFull: 'full'
 
@@ -49,7 +49,7 @@ ReversiRoom = machina.Fsm.extend
 
       watchOut: (player) ->
         @_removeWatcher(player)
-      
+
       transitionCheck: ->
         if @_players.length >= 2
           @handle('goFull')
@@ -57,7 +57,7 @@ ReversiRoom = machina.Fsm.extend
           @handle('goEmpty')
         else
           @handle('goWaiting')
-      
+
       goEmpty: 'empty'
       goFull: 'full'
 
@@ -76,7 +76,7 @@ ReversiRoom = machina.Fsm.extend
 
       watchOut: (player) ->
         @_removeWatcher(player)
-      
+
       transitionCheck: ->
         if @_players.length >= 2
           @handle('goFull')
@@ -84,7 +84,7 @@ ReversiRoom = machina.Fsm.extend
           @handle('goEmpty')
         else
           @handle('goWaiting')
-      
+
       goWaiting: 'waiting'
       goEmpty: 'empty'
 
@@ -124,7 +124,7 @@ ReversiRoom = machina.Fsm.extend
         @handle 'endGame', reason,
           black: if blackplayer.name == illigalPlayer.name then 'LOSE' else 'WIN'
           white: if whiteplayer.name == illigalPlayer.name then 'LOSE' else 'WIN'
-       
+
       illegalCheck: (player, error) ->
         @handle('illegalEndGame', player, 'ILLIGAL_MOVE') if player.options.illigalMoveLose
         throw error
@@ -143,7 +143,7 @@ ReversiRoom = machina.Fsm.extend
           lTime = 0
 
         @leftTime[player.name] = lTime
-        @emit 'ack', 
+        @emit 'ack',
           player: player
           time: lTime
 
@@ -152,7 +152,7 @@ ReversiRoom = machina.Fsm.extend
 
       logout: (player) ->
         @_removeUser(player)
-      
+
       watchIn: (player) ->
         @_addWatcher(player)
 
@@ -164,8 +164,8 @@ ReversiRoom = machina.Fsm.extend
           @handle('cancelGame')
         else if @_players.length + @_watchers.length == 0
           @handle('goEmpty')
-      
-      
+
+
       move: (player, x, y) ->
         update = null
         autoPassCount = 0
@@ -184,7 +184,7 @@ ReversiRoom = machina.Fsm.extend
         catch error
           @board.removeAllListeners()
           @handle 'illegalCheck', player, error
-          
+
 
       pass: (player) ->
         autoPassCount = 0
@@ -239,7 +239,7 @@ ReversiRoom = machina.Fsm.extend
           playerResult.push
             player: player
             result: self.get('playerResult', player)
-            
+
         @_result =
           forPlayer: playerResult
           forWatcher:
@@ -268,13 +268,13 @@ ReversiRoom = machina.Fsm.extend
 
         idx = [ReversiBoard.white, ReversiBoard.black].indexOf(userColor)
         issue = wl[idx]
-      
+
         color: userColor
         issue: issue
         reason: @_reason
         black: @_stone.black
         white: @_stone.white
-        
+
       transitionCheck: ->
         if @_players.length + @_watchers.length == 0
           @handle('goEmpty')
@@ -300,7 +300,7 @@ ReversiRoom = machina.Fsm.extend
     @handle('emitTurn')
 
     return @
-  
+
   _suffleColor: ->
     if Math.random() > 0.5
       tmp = @colors[0]
@@ -329,7 +329,7 @@ ReversiRoom = machina.Fsm.extend
     @emit 'login', player
     @handle 'transitionCheck'
     @
-    
+
   _removeUser: (player) ->
     idx = @findIdxByName(@_players, player.name)
     if idx >= 0
@@ -350,7 +350,7 @@ ReversiRoom = machina.Fsm.extend
     @handle 'emitAllUpdates', player
     @handle 'transitionCheck'
     @
-    
+
   _removeWatcher: (player) ->
     idx = @findIdxByName(@_watchers, player.name)
     if idx >= 0
@@ -361,7 +361,7 @@ ReversiRoom = machina.Fsm.extend
       @
     else
       throw new Error('playerNotFound')
-    
+
   getColor: (player) ->
     idx = @findIdxByName(@_players, player.name)
     return null if idx < 0 || idx > 1
@@ -429,5 +429,3 @@ ReversiRoom = machina.Fsm.extend
   watchers: -> @_watchers
 
 module.exports = ReversiRoom
-
-

@@ -95,7 +95,7 @@ class ReversiServer
       room.saveTime() if room
 
   disconnect: (username) ->
-    try 
+    try
       @logout(username)
       @watchOut(username)
     catch error
@@ -118,7 +118,7 @@ class ReversiServer
     finally
       player.notice 'move submitted'
       if room
-        room.emit 'sendEvents' 
+        room.emit 'sendEvents'
         room.saveTime()
 
   pass: (username) ->
@@ -135,7 +135,7 @@ class ReversiServer
     finally
       player.notice 'pass submitted'
       if room
-        room.emit 'sendEvents' 
+        room.emit 'sendEvents'
         room.saveTime()
 
   timeCheck: (username) ->
@@ -159,7 +159,7 @@ class ReversiServer
   requestNoticeAll: (type, data) ->
     @_connectors.forEach (connector) ->
       connector.noticeAll(type, data)
-   
+
   requestNoticeToGroup: (groupname, type, data) ->
     @_connectors.forEach (connector) ->
       connector.noticeToGroup(groupname, type, data)
@@ -266,7 +266,7 @@ class ReversiServer
 
     room.on 'ack', (res) ->
       console.log "event: ack #{res.player.name} #{res.time}"
-      res.player.notice 'ack', 
+      res.player.notice 'ack',
         time: res.time
 
     room.on 'sendEvents', ->
@@ -357,4 +357,3 @@ Player = machina.Fsm.extend
     @connector.leaveGroup(@name, @client, groupname)
 
 module.exports = ReversiServer
-

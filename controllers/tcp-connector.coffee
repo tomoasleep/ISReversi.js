@@ -42,7 +42,7 @@ class TcpConnector
     socket.on 'close', ->
       console.log "server -/- close connection #{socket.remoteAddress}:#{socket.remotePort}"
       self.operator.disconnect client.username if client.username
-    
+
     socket.on 'error', ->
       console.log "error occured"
       self.operator.disconnect client.username if client.username
@@ -52,7 +52,7 @@ class TcpConnector
     switch com.command
       when 'OPEN'
 
-        nameSplit = com.args[0].split(":") 
+        nameSplit = com.args[0].split(":")
         console.log nameSplit
         roomname = if nameSplit.length > 1 then nameSplit[0] else nameSplit[0]
         username = if nameSplit.length > 1 then nameSplit[1] else nameSplit[0]
@@ -74,7 +74,7 @@ class TcpConnector
           posCharY = posChar[1]
 
           charParseArr = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
-          
+
           charIdx = charParseArr.indexOf(posCharX) + 1
           pos =
             x: charIdx
@@ -133,7 +133,7 @@ class TcpConnector
           else
             emitMove = false
             emitPass = false
-        
+
         if eventStocks.move && emitMove
           sdata = eventStocks.move
           if username == sdata.username
@@ -173,7 +173,7 @@ class TcpConnector
   socketWrite: (client, msg) ->
     console.log "server-> #{msg}/ to: #{client.socket.remoteAddress}:#{client.socket.remotePort}"
     client.socket.write msg
-        
+
   @parser: (buffer, str) ->
     constr = buffer + str
     spstr = constr.split("\n")
@@ -192,9 +192,6 @@ class TcpConnector
   @convertPos: (x, y) ->
     charParseArr = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
     "#{charParseArr[x - 1]}#{y}"
-        
+
 
 module.exports = TcpConnector
-
-      
-

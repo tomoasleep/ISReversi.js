@@ -51,11 +51,11 @@ describe 'ReversiRoom', ->
       testname2 = 'testuser2'
       user1 =
         name: testname1
-        options: 
+        options:
           autoPass: true
       user2 =
         name: testname2
-        options: 
+        options:
           autoPass: true
       turnPlayer = null
 
@@ -78,4 +78,3 @@ describe 'ReversiRoom', ->
       room.board.board[4][4] = Reversi.black
       room.board.board[5][5] = Reversi.black
       room.pass(turnPlayer)
-

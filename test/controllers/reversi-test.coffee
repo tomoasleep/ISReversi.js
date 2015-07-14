@@ -42,7 +42,7 @@ describe 'Reversi', ->
 
     it 'canMove (3, 4, black)', ->
       assert.equal true, rev.canMove(3, 4, ReversiBoard.black)
-    
+
     it '!canMove (3, 3, black) (cannot reverse any stone)', ->
       assert.equal false, rev.canMove(3, 3, ReversiBoard.black)
 
@@ -147,5 +147,3 @@ describe 'Reversi', ->
 
       rev.board[5][5] = ReversiBoard.black
       rev.move(3, 4, ReversiBoard.black)
-
-

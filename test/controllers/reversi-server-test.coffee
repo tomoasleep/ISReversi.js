@@ -30,7 +30,7 @@ describe 'ReversiServer', ->
   beforeEach ->
     revServer = new ReversiServer()
     testConnector = new TestConnector(revServer)
-  
+
   it 'registerConnector', (done) ->
     # revServer.connectors().length.should.eql(1)
     testConnector.noticeAllfunc = (type, data) ->
@@ -147,7 +147,7 @@ describe 'ReversiServer', ->
     it 'gamestart', (done) ->
       usernames = ['testuser1', 'testuser2']
       roomname = 'testroom'
-      testClients = [{id: "test1"}, {id: "test2"}] 
+      testClients = [{id: "test1"}, {id: "test2"}]
       count = 4
 
       check = ->
@@ -182,7 +182,7 @@ describe 'ReversiServer', ->
     it 'gamecancel', (done) ->
       usernames = ['testuser1', 'testuser2']
       roomname = 'testroom'
-      testClients = [{id: "test1"}, {id: "test2"}] 
+      testClients = [{id: "test1"}, {id: "test2"}]
       count = 3
 
       check = ->
@@ -419,4 +419,3 @@ describe 'ReversiServer', ->
 
       revServer._rooms[roomname].board.board[5][5] = Reversi.black
       revServer.move(nextTurnPlayerName, 3, 4)
-
